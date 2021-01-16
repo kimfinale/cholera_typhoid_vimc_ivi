@@ -1,0 +1,442 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+## Read and save data
+```{r}
+library(data.table)
+library(devtools)
+library(usethis)
+library(tidyverse)
+
+# incidence_rate <- fread("data/incidence_rate.csv")
+# incidence_rate[, country := clean_country_names(country)] 
+# # incidence_rate["country"] <- lapply(incidence_rate["country"], function(x) clean_country_names(x))
+# # add cholera data
+# cholera_ir <- fread("data/cholera_incidence.csv")
+# cholera_ir$Country <- clean_country_names(cholera_ir$Country)
+# names(cholera_ir) <- c("disease", "country", "incidence_rate_100Kpyo") # to match the names of incidence_rate
+# 
+# ir_ty <- incidence_rate[disease == "typhoid", c("disease", "country", "incidence_rate_100Kpyo")]
+# incidence_rate <- rbind(ir_ty, cholera_ir)
+# incidence_rate[disease == "typhoid", disease := "Typhoid"]
+# incidence_rate$country <- clean_country_names(incidence_rate$country)
+# 
+# use_data(incidence_rate, overwrite = T)
+  
+# incidence_rate[, country := clean_country_names(country)] 
+
+# for (i in 1:nrow(gavi201910_int_pop_both)){
+#   incidence_rate$country[i] <- clean_country_names(incidence_rate$country[i])
+# }
+## to make the country name consitent: DR Congo -> "Congo, the Democratic Republic of the"
+# incidence_rate %>% filter(country != "DR Congo") -> ir1
+# incidence_rate %>% filter(country == "DR Congo") %>% mutate(country = "Congo, Democratic Republic of the") -> ir2
+# incidence_rate <- bind_rows(ir1, ir2)
+
+# gavi201910_int_pop_both <- fread("data/201910gavi-5_dds-201910_2_int_pop_both.csv")
+# gavi201910_int_pop_both[, country := clean_country_names(country)] 
+# use_data(gavi201910_int_pop_both, overwrite = TRUE)
+# 
+# life_expectancy <- fread(life_expectancy_data)
+# life_expectancy[, country := clean_country_names(country)] 
+# use_data(life_expectancy, overwrite = TRUE)
+# 
+# prop_basic_san <- setDT(prop_basic_san)
+# prop_basic_san[, country := clean_country_names(country)] 
+# use_data(prop_basic_san, overwrite = TRUE)
+# 
+# parameters <- fread("data/parameters.csv")
+# usethis::use_data(parameters, overwrite = T)
+# 
+p_dying_age <- fread("data/201910gavi-5_dds-201910_p_dying_both.csv")
+p_dying_age[, country := clean_country_names(country)] 
+use_data(p_dying_age, overwrite = T)
+# 
+# country_name_table <- fread("data/country_names.csv")
+# names(country_name_table) <- c("country", "iso3")
+# country_name_table <- country_name_table[1:112,] # remove the bottom row, Total
+# country_name_table[, country := clean_country_names(country)] 
+# use_data(country_name_table, overwrite = T)
+```
+
+## Population at risk of cholera or typhoid fever
+We assume that people who have at least basic sanitation are safe from these diseases (or at least, have reduced risk).
+We used the WaSH data from JMP (2000-2017) to fit a saturating exponential function to roughly estimate the trend of WaSH.
+
+```{r}
+# d <- fread("data/JMP2019.csv")
+# d <- d[-(1:3),]
+# d <- d %>% filter(V3 == 'National') %>% select(V1, V2, V3, V17) # country, year, rural/urban/national, percent population with access to basic sanitation services
+# names(d) <- c("country", "year", "rural/urban/national", "prop_san")
+# d$year <- as.double(d$year)
+# d$prop_san <- as.double(d$prop_san)/100 # make percents to fractions 
+# d
+# san <- d %>% filter(country == "Congo, Democratic Republic of the")
+# # san <- d %>% filter(country == 'Ethiopia')
+# # san <- d %>% filter(country == 'Democratic Republic of the Congo')
+# # san <- d %>% filter(country == 'India')
+# # san <- d %>% filter(country == 'Nigeria')
+# 
+# f <- function (theta, x) {1 - exp(-theta[2] * (x - theta[1]))} # saturating exponential function is fitted
+# 
+# yr <- san$year
+# prop <- san$prop_san
+# 
+# ssq <- function(theta){
+#   tau <- theta[1]
+#   k <- theta[2]/(1-theta[2])
+#   sum((prop - (1 - exp(-k * (yr - tau))))^2)
+# }
+# 
+# library(optimx)
+# start <- c(1990, 1e-3)
+# lower <- c(1e-6, 1e-6)
+# upper <- c(2000-1e-3, 10)
+# 
+# fit <- optimx(par = start,
+#               fn = ssq,
+#               method = 'nlminb',
+#               lower = lower, 
+#               upper = upper,
+#               itnmax = 100,
+#               control = list(trace=5))
+# 
+# x <- 2000:2100 
+# plot(x, 1 - exp(-fit$p2 * (x - fit$p1)), type='l')
+# points(yr, prop, col=2)
+
+# prop_san <- data.frame(country = "Pakistan", yr = 2000:2100)
+# prop_san$pred <- 1 - exp(-fit$p2 * (prop_san$yr - fit$p1))
+# 
+# prop_san2 <- data.frame(country = "Ethiopia", yr = 2000:2100)
+# prop_san2$pred <- 1 - exp(-fit$p2 * (prop_san2$yr - fit$p1))
+
+# prop_san3 <- data.frame(country = "Democratic Republic of the Congo", yr = 2000:2100)
+# prop_san3$pred <- 1 - exp(-fit$p2 * (prop_san3$yr - fit$p1))
+
+# prop_san4 <- data.frame(country = "India", yr = 2000:2100)
+# prop_san4$pred <- 1 - exp(-fit$p2 * (prop_san4$yr - fit$p1))
+
+# prop_san5 <- data.frame(country = "Nigeria", yr = 2000:2100)
+# prop_san5$pred <- 1 - exp(-fit$p2 * (prop_san5$yr - fit$p1))
+
+# prop_basic_san <- rbind(prop_san, prop_san2, prop_san3, prop_san4, prop_san5)
+# ## Change "Democratic Republic of the Congo" to "Congo, the Democratic Republic of the"
+# prop_basic_san %>% filter(country != "Democratic Republic of the Congo") -> p1
+# prop_basic_san %>% filter(country == "Democratic Republic of the Congo") %>% mutate(country = "Congo, the Democratic Republic of the") -> p2
+# prop_basic_san <- bind_rows(p1, p2)
+# names(prop_basic_san) <- c("country", "year", "prop")
+# use_data(prop_basic_san, overwrite = TRUE)
+```
+
+## Estimate the proportion of population with access to basic sanitation services
+WaSH data were downloaded from [JMP](https://washdata.org/data/downloads#WLD) and Household World file.
+The data in Excel worksheet format has 4 tabs: introduction and 3 data sheets (water, sanitation, and hygiene).
+We assume that people with at least basic sanitation are protected from cholera, which is a simplifying assumption, which will be addressed (eg, we can alternatively assume that they have lower risk of infection). 
+The data file was opened in MS Excel and each data tab was saved as csv (JMP2019_WLD_water.csv, JMP2019_WLD_sanitation.csv, JMP2019_WLD_hygiene.csv) 
+
+```{r}
+# d <- fread("data/JMP_2019_WLD_sanitation.csv")
+# d <- d[-c(1,2,4179,4180), c(1,3,6)] # after viewing the file, rows and columns were decided.
+# names(d) <- c("country", "year", "prop_san") # proportion of population with at least basic sanitation 
+# d[, year := as.double(year)]
+# d[, prop_san := as.double(prop_san)/100]# make percents to fractions 
+# d <- d[!is.na(d$prop_san),]
+# d[, country := clean_country_names(country)]
+# 
+# ## Select a country of interest
+# san <- d %>% filter(country == target_countries_cholera[5])
+# 
+# f <- function (theta, x) {1 - exp(-theta[2] * (x - theta[1]))} # saturating exponential function is fitted
+# 
+# yr <- san$year
+# prop <- san$prop_san
+# 
+# ssq <- function(theta){
+#   tau <- theta[1]
+#   k <- theta[2]/(1-theta[2])
+#   sum((prop - (1 - exp(-k * (yr - tau))))^2)
+# }
+# 
+# library(optimx)
+# start <- c(1990, 1e-3)
+# lower <- c(1e-6, 1e-6)
+# upper <- c(2000-1e-3, 10)
+# 
+# fit <- optimx(par = start,
+#               fn = ssq,
+#               method = 'nlminb',
+#               lower = lower, 
+#               upper = upper,
+#               itnmax = 100,
+#               control = list(trace=5))
+# 
+# ## Quick diagnostic plot
+# x <- 2000:2100 
+# plot(x, 1 - exp(-fit$p2 * (x - fit$p1)), type='l')
+# points(yr, prop, col=2)
+# 
+# prop_san <- data.frame(country = target_countries_cholera[2], yr = 2000:2100)
+# prop_san$pred <- 1 - exp(-fit$p2 * (prop_san$yr - fit$p1))
+# # 
+# prop_san2 <- data.frame(country = target_countries_cholera[3], yr = 2000:2100)
+# prop_san2$pred <- 1 - exp(-fit$p2 * (prop_san2$yr - fit$p1))
+# 
+# prop_san3 <- data.frame(country = target_countries_cholera[4], yr = 2000:2100)
+# prop_san3$pred <- 1 - exp(-fit$p2 * (prop_san3$yr - fit$p1))
+# 
+# prop_san4 <- data.frame(country =  target_countries_cholera[5], yr = 2000:2100)
+# prop_san4$pred <- 1 - exp(-fit$p2 * (prop_san4$yr - fit$p1))
+# 
+# prop_basic_san2 <- rbind(prop_san, prop_san2, prop_san3, prop_san4)
+# names(prop_basic_san2) <- c("country", "year", "prop")
+# prop_basic_san <- rbind(prop_basic_san, prop_basic_san2)
+# use_data(prop_basic_san, overwrite = TRUE)
+```
+
+## Vaccine coverage data
+Data files in csv format were downloaded from the VIMC modeling through the following steps:
+1.	Log on at https://montagu.vaccineimpact.org/
+2.	Select ‘Modellers Contribution Portal’
+3.	Select ‘201910gavi (version 5)’
+
+```{r}
+# vacc_cov_input_campaign_cholera <- fread("data/coverage_201910gavi-5_cholera-campaign-default-test.csv") 
+# vacc_cov_input_campaign_cholera$country <- clean_country_names(vacc_cov_input_campaign_cholera$country)
+# vacc_cov_input_routine_typhoid <- fread("data/coverage_201910gavi-5_typhoid-routine-default-test.csv")
+# vacc_cov_input_campaign_typhoid <- fread("data/coverage_201910gavi-5_typhoid-campaign-default-test.csv")
+# vacc_cov_input_routine_typhoid$country <- clean_country_names(vacc_cov_input_routine_typhoid$country)
+# vacc_cov_input_campaign_typhoid$country <- clean_country_names(vacc_cov_input_campaign_typhoid$country)
+# 
+# usethis::use_data(vacc_cov_input_routine_typhoid, overwrite = T)
+# usethis::use_data(vacc_cov_input_campaign_typhoid, overwrite = T)
+# usethis::use_data(vacc_cov_input_campaign_cholera, overwrite = T)
+```
+
+## Check functions
+```{r}
+devtools::load_all(".")
+
+cntry <- "Ethiopia"
+dis <- "Cholera"
+pop <- setup_cohorts(country = cntry)
+cases <- calculate_cases(population = pop, country = cntry, disease = dis)
+yld <- calculate_YLD(cases = cases, disease = dis)
+yll <- calculate_YLL(cases = cases, country = cntry, disease = dis)
+daly <- calculate_DALY(cases = cases, country = cntry, disease = dis)
+daly1 <- yll + yld
+daly[1:5, 1:5]
+daly1[1:5, 1:5]
+# ## document the function
+# devtools::document()
+```
+
+## Check Vaccine scenarios
+```{r}
+target_countries <- c('Pakistan', 'Ethiopia', 'Congo, Democratic Republic of the', 'India', 'Nigeria')
+target_countries_cholera <- c("Congo, Democratic Republic of the", "Kenya", "Somalia", "South Sudan", "Ethiopia")
+cntry <- "Congo, Democratic Republic of the"
+dis <- "Cholera"
+dis <- "Typhoid"
+# for (cntry in target_countries) {
+  cntry <- target_countries[1]
+  vc <- create_vaccine_coverage(country = cntry, disease = dis, routine = T)
+  pop <- setup_cohorts(country = cntry)
+  pop_vacc <- calculate_vaccine_protected(country = cntry, population = pop, disease = dis, vacc_coverage = vc)
+
+
+vc_cmp_chol <- lapply(target_countries_cholera, function(x) create_vaccine_coverage(country = x, disease ="Cholera", routine = F))
+vc_cmp_ty <- lapply(target_countries, function(x) create_vaccine_coverage(country = x, disease ="typhoid", routine = F))
+
+
+```
+
+## Simulation 
+```{r}
+# fls <- list.files("data", pattern = paste0("*.typ", ".*rds$"), full.names = T)
+# unlink(fls)
+devtools::load_all(".")
+cntries_typhoid <- c('Pakistan', 'Ethiopia', 'Congo, Democratic Republic of the', 'India', 'Nigeria')
+cntries_cholera <- c("Congo, Democratic Republic of the", "Kenya", "Somalia", "South Sudan", "Ethiopia")
+dis <- c("Cholera", "Typhoid")
+dis <- "Typhoid"
+vacc_scenario = c("novacc", "campaign", "routine")
+# vacc_scenario = c("novacc", "campaign")
+set.seed(0)
+for (d in dis) {
+  if (d == "Cholera") {
+    cntries <- cntries_cholera
+  } else {
+    cntries <- cntries_typhoid
+  }
+  for (vs in vacc_scenario) {
+    if (!(d == "Cholera" & vs == "routine")) {
+      stoch_run_scenario(disease = d, country = cntries, vacc_scenario = vs)
+    }
+  }
+}
+```
+
+## Combine results into a single file
+```{r}
+# v_scenario <- "routine"
+disease <- c("Cholera", "Typhoid")
+vacc_scenario <- c("novacc", "campaign", "routine")
+for(dis in disease) {
+  for (vacc in vacc_scenario) {
+    if (!(dis == "Cholera" & vs == "routine")) {
+      fls <- list.files("data", pattern = paste0("^rep.*", dis, ".*", vacc, ".*rds$"), full.names = T)
+      fls
+      x <- lapply(fls, function(x) readRDS(x))
+      res <- do.call(rbind, x)
+      saveRDS(res, paste0("data/central_", dis, "_", vacc, ".rds"))
+    }
+  }
+}
+
+```
+
+## Diagnostic plots
+```{r}
+library(ggplot2)
+dis <- "Cholera"
+vacc <- "campaign"
+cntry <- "Somalia"
+res <- readRDS(paste0("data/central_",  dis, "_", vacc, ".rds"))
+year_val_plot(disease = dis, country = cntry, sim_central_value = res)
+year_val_plot(disease = dis, country = cntry, sim_central_value = res, age = 10)
+```
+
+## Report for the stochastic outputs
+```{r}
+dis <- c("Cholera", "Typhoid")
+vacc_scenario = c("novacc", "campaign", "routine")
+
+for (d in dis) {
+  for (vs in vacc_scenario) {
+    if (!(d == "Cholera" & vs == "routine")) {
+      if (d == "Cholera") {
+        cntry <- cntries_cholera
+      } else {
+        cntry <- cntries_typhoid
+      }
+      list1 <- list()
+      for(i in seq_along(cntry)){
+        output1 <- readRDS(paste0("data/stoch_output_", d, "_",  cntry[i], "_", vs, ".rds"))
+        list1[[i]] <- vimc_stoch_report(disease = d, country = cntry[i], sim_output = output1)
+      }
+      res <- do.call("rbind", list1)
+      saveRDS(res, paste0("data/stoch_", d, "_", vs, ".rds"))
+    }
+    
+  }
+}
+```
+
+
+
+## Uploading the results
+```{r}
+library(data.table)
+# dis <- "typhoid"
+# v_scenario <- "routine"
+# fls <- list.files("./data", pattern=paste0("central.*", dis, ".*", v_scenario, ".*rds$"), full.names = T)
+# d <- readRDS(fls)
+# fwrite(d, paste0("outputs/", sim, "_", dis, "_", v_scenario, ".csv"))
+
+
+dis <- c("Cholera", "Typhoid")
+vacc <- c("novacc", "campaign", "routine")
+sims <- c("stoch", "central")
+
+for (d in dis) {
+  for (v in vacc) {
+    for (sim in sims){
+      if (!(tolower(d) == "cholera" & tolower(v) == "routine" )){
+        fls <- list.files("./data", pattern = paste0(sim, "_", d, "_", v, ".rds$"), full.names = T)
+        fls
+        res <- readRDS(fls)
+        res$disease <- d
+        fwrite(res, paste0("outputs/", sim, "_", d, "_", v, ".csv"))
+      }
+    }
+  }
+}
+
+##
+# fwrite(parameters, "outputs/parameters.csv")
+# fwrite(incidence_rate, "outputs/incidence_rate.csv")
+
+```
+
+```{r}
+sim <- "stoch"
+# d <- "Cholera"
+v <- "novacc"
+fls <- list.files("outputs/", pattern = paste0(sim, "(.*)param(.*).rds$"), full.names = T)
+for (fl in fls) {
+  res <- readRDS(fl)
+  fwrite(res, gsub("rds$", "csv", fl))
+}
+fls
+c1 <- readRDS(fls[2])
+c1$vacc_type <- "No vaccination"
+c2 <- readRDS(fls[1])
+c2$vacc_type <- "Campaign"
+c <- rbind(c1,c2)
+c$`disability weight` <- 0.202
+c$`duration of illness` <- "5 days"
+c$`case fatality ratio` <- 0.030
+c$`duration of vaccine-induced immunity` <- "3 years"
+c$`vaccine efficacy` <- 0.640
+c$`vaccine efficacy (< 5 yo)` <- 0.300
+
+fwrite(c, "outputs/stoch_param_Cholera.csv")
+
+t1 <- readRDS(fls[4])
+t1$vacc_type <- "No vaccination"
+t2 <- readRDS(fls[3])
+t2$vacc_type <- "Campaign"
+t3 <- readRDS(fls[5])
+t3$vacc_type <- "Campaign and Routine"
+
+t <- rbind(t1, t2, t3)
+t$`disability weight` <- 0.053
+t$`duration of illness` <- "28 days"
+t$`case fatality ratio` <- 0.01
+t$`duration of vaccine-induced immunity` <- "19 years"
+t$`vaccine efficacy` <- 0.95
+
+fwrite(t, "outputs/stoch_param_Typhoid.csv")
+
+```
+
+
+
+## Cholera report
+```{r}
+devtools::load_all(".")
+target_countries <- c("DRC", "Kenya", "Somalia", "South Sudan", "Ethiopia" )
+cntry <- clean_country_names(target_countries)
+library(data.table)
+
+vc_list_cmp <- lapply(cntry, function(x) create_vaccine_coverage(country = x, disease = "Cholera", routine = F))
+
+pop <- setup_cohorts(country = nms[1])
+pop_vacc <- calculate_vaccine_protected(country = nms[1], population = pop, vacc_coverage = vc_list[[1]])
+
+```
+
+## Parameter reset
+```{r}
+# parameters <- fread("data/parameters.csv")
+oripar <- parameters
+newpar <- oripar[1:3,]
+newpar$value <- newpar$value * 10
+revpar <- reset_param(new = newpar, original = oripar)
+```
+
