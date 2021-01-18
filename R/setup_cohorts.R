@@ -12,21 +12,17 @@
 #'
 setup_cohorts <- function(country = NULL,
                          year = 2000:2100,
-                         rel_risk_low = 0.0,
-                         population_data ="data/201910gavi-5_dds-201910_2_int_pop_both.csv",
-                         prop_san_data = "data/JMP2019.csv"){
-
-
+                         rel_risk_low = 0.0){
 
   if(is.null(country)){
     stop("Country name must be provided")
   }
-  if(!exists("pop")){
-    pop <- data.table::fread(population_data)
-  }
-  if(!exists("prop")){
-    prop <- data.table::fread(prop_san_data)
-  }
+  # if(!exists("pop")){
+  #   pop <- data.table::fread(population_data)
+  # }
+  # if(!exists("prop")){
+  #   prop <- data.table::fread(prop_san_data)
+  # }
 
   pop <- gavi201910_int_pop_both
   prop <- prop_basic_san

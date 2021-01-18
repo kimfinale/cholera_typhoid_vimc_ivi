@@ -11,32 +11,36 @@
 #' @import data.table
 #' @examples
 #' pop <- setup_population(disease, country); calculate_cases(disease, country, pop)
-calculate_cases <- function (disease = NULL,
+calculate_cases <- function (disease = c("Typhoid", "Cholera"),
                              country = NULL,
                              population = NULL,
                              year = 2000:2100,
                              ir = NULL){
 
-  if (is.null(disease)) {
-    stop("Disease name must be provided")
-  }
+  dis <- match.arg(disease)
+  # cat("disease =", dis, "\n")
+  # if (is.null(disease)) {
+  #   stop("Disease name must be provided")
+  # }
   if (is.null(country)) {
     stop("Country name must be provided")
   }
+  # cntry <- match.arg(country, country_name_table$country)
   cntry <- clean_country_names(country)
   rm(country)
 
-  dis <- disease
-  rm(disease)
+  # dis <- disease
+  # rm(disease)
 
   if (is.null(population)) {
     population <- setup_cohorts(country = cntry, year = year)
   }
 
   if (is.null(ir)) {
-    ir <- incidence_rate %>%
-    dplyr::filter(tolower(disease) == tolower(dis), tolower(country) == tolower(cntry)) %>%
-    pull(incidence_rate_100Kpyo)
+    # ir <- incidence_rate %>%
+    # dplyr::filter(tolower(disease) == tolower(dis), tolower(country) == tolower(cntry)) %>%
+    # pull(incidence_rate_100Kpyo)
+    ir <- incidence_rate[tolower(disease) == tolower(dis) & tolower(country) == tolower(cntry), incidence_rate_100Kpyo]
   }
 
   burden <- data.frame(matrix(NA, nrow = nrow(population), ncol = ncol(population)))
