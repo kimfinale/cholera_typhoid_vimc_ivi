@@ -221,8 +221,8 @@ Data files in csv format were downloaded from the VIMC modeling through the foll
 ```{r}
 devtools::load_all(".")
 
-cntry <- "Ethiopia"
-dis <- "Cholera"
+cntry <- "India"
+dis <- "Typhoid"
 pop <- setup_cohorts(country = cntry)
 cases <- calculate_cases(population = pop, country = cntry, disease = dis)
 yld <- calculate_YLD(cases = cases, disease = dis)
@@ -243,8 +243,8 @@ cntry <- "Congo, Democratic Republic of the"
 dis <- "Cholera"
 dis <- "Typhoid"
 # for (cntry in target_countries) {
-  cntry <- target_countries[1]
-  vc <- create_vaccine_coverage(country = cntry, disease = dis, routine = T)
+  cntry <- target_countries[4]
+  vc <- create_vaccine_coverage(country = cntry, disease = dis, routine = F)
   pop <- setup_cohorts(country = cntry)
   pop_vacc <- calculate_vaccine_protected(country = cntry, population = pop, disease = dis, vacc_coverage = vc)
 
@@ -285,15 +285,16 @@ for (d in dis) {
 ```{r}
 # v_scenario <- "routine"
 disease <- c("Cholera", "Typhoid")
+disease <- c("Typhoid")
 vacc_scenario <- c("novacc", "campaign", "routine")
 for(dis in disease) {
   for (vacc in vacc_scenario) {
     if (!(dis == "Cholera" & vs == "routine")) {
-      fls <- list.files("data", pattern = paste0("^rep.*", dis, ".*", vacc, ".*rds$"), full.names = T)
+      fls <- list.files("outputs", pattern = paste0("^rep.*", dis, ".*", vacc, ".*rds$"), full.names = T)
       fls
       x <- lapply(fls, function(x) readRDS(x))
       res <- do.call(rbind, x)
-      saveRDS(res, paste0("data/central_", dis, "_", vacc, ".rds"))
+      saveRDS(res, paste0("outputs/central_", dis, "_", vacc, ".rds"))
     }
   }
 }
@@ -306,7 +307,7 @@ library(ggplot2)
 dis <- "Cholera"
 vacc <- "campaign"
 cntry <- "Somalia"
-res <- readRDS(paste0("data/central_",  dis, "_", vacc, ".rds"))
+res <- readRDS(paste0("outputs/central_",  dis, "_", vacc, ".rds"))
 year_val_plot(disease = dis, country = cntry, sim_central_value = res)
 year_val_plot(disease = dis, country = cntry, sim_central_value = res, age = 10)
 ```
@@ -314,6 +315,7 @@ year_val_plot(disease = dis, country = cntry, sim_central_value = res, age = 10)
 ## Report for the stochastic outputs
 ```{r}
 dis <- c("Cholera", "Typhoid")
+dis <- c("Typhoid")
 vacc_scenario = c("novacc", "campaign", "routine")
 
 for (d in dis) {
@@ -326,17 +328,15 @@ for (d in dis) {
       }
       list1 <- list()
       for(i in seq_along(cntry)){
-        output1 <- readRDS(paste0("data/stoch_output_", d, "_",  cntry[i], "_", vs, ".rds"))
+        output1 <- readRDS(paste0("outputs/stoch_output_", d, "_",  cntry[i], "_", vs, ".rds"))
         list1[[i]] <- vimc_stoch_report(disease = d, country = cntry[i], sim_output = output1)
       }
       res <- do.call("rbind", list1)
-      saveRDS(res, paste0("data/stoch_", d, "_", vs, ".rds"))
+      saveRDS(res, paste0("outputs/stoch_", d, "_", vs, ".rds"))
     }
-    
   }
 }
 ```
-
 
 
 ## Uploading the results
@@ -350,6 +350,7 @@ library(data.table)
 
 
 dis <- c("Cholera", "Typhoid")
+dis <- c("Typhoid")
 vacc <- c("novacc", "campaign", "routine")
 sims <- c("stoch", "central")
 
@@ -357,7 +358,7 @@ for (d in dis) {
   for (v in vacc) {
     for (sim in sims){
       if (!(tolower(d) == "cholera" & tolower(v) == "routine" )){
-        fls <- list.files("./data", pattern = paste0(sim, "_", d, "_", v, ".rds$"), full.names = T)
+        fls <- list.files("outputs", pattern = paste0(sim, "_", d, "_", v, ".rds$"), full.names = T)
         fls
         res <- readRDS(fls)
         res$disease <- d
@@ -440,3 +441,15 @@ newpar$value <- newpar$value * 10
 revpar <- reset_param(new = newpar, original = oripar)
 ```
 
+## Output file check
+```{r}
+# parameters <- fread("data/parameters.csv")
+library(data.table)
+res <- fread("outputs/central_Typhoid_campaign.csv")
+res %>% filter(country == "IND", year %in% 2023:2026) -> res1
+sum(res1 < 0)
+## It has negative values  
+cntry <- "India"
+pop <- setup_cohorts(country = cntry)
+cas <- calculate_cases(disease = "Typhoid", country = cntry, population = pop)  
+```

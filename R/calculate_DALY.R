@@ -17,11 +17,12 @@ calculate_DALY <- function (disease = NULL,
                             year = 2000:2100,
                             disability_weight = NULL,
                             illness_duration = NULL,
-                            case_fatality = NULL,
-                            life_expectancy_data = "data/201910gavi-5_dds-201910_2_life_ex_both.csv") {
+                            case_fatality_ratio = NULL) {
 
-  YLL <- calculate_YLL(cases = cases, country = country, disease = disease, life_expectancy_data = life_expectancy_data)
-  YLD <- calculate_YLD(cases = cases, disease = disease)
+  YLL <- calculate_YLL(disease = disease, cases = cases, country = country,
+                       case_fatality_ratio = case_fatality_ratio)
+  YLD <- calculate_YLD(disease = disease, cases = cases, disability_weight = disability_weight,
+                       illness_duration = illness_duration)
 
 
   return (YLL + YLD)

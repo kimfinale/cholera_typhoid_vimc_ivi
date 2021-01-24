@@ -83,7 +83,7 @@ stoch_run_scenario <- function(disease = NULL,
     column_order <- c("disease", "year", "age", "country", "country_name", "cohort_size", "cases", "deaths", "dalys")
     report <- dplyr::relocate(report, any_of(column_order))
 
-    saveRDS(report, paste0("data/report_", dis, "_",  tg, "_", vacc_scenario,  ".rds"))
+    saveRDS(report, paste0("outputs/report_", dis, "_",  tg, "_", vacc_scenario,  ".rds"))
   }
   saveRDS(stoch_param, paste0("outputs/stoch_param_", dis, "_", vacc_scenario, ".rds"))
 

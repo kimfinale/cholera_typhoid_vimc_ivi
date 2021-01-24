@@ -6,16 +6,15 @@
 #' @export
 #' @examples
 #' calculate_YLL(cases = cases)
-calculate_YLL <- function (cases = NULL,
-                           disease = c("Typhoid", "Cholera"),
+calculate_YLL <- function (disease = c("Typhoid", "Cholera"),
+                           cases = NULL,
                            country = NULL,
                            year = 2000:2100,
-                           case_fatality = NULL,
-                           life_expectancy_data = "data/201910gavi-5_dds-201910_2_life_ex_both.csv") {
+                           case_fatality_ratio = NULL) {
 
-  if(!exists("life_expectancy")) {
-    life_expectancy <- data.table::fread(life_expectancy_data)
-  }
+  # if(!exists("life_expectancy")) {
+  #   life_expectancy <- data.table::fread(life_expectancy_data)
+  # }
   dis <- disease
   rm(disease)
   if (is.null(country)) {
@@ -24,9 +23,9 @@ calculate_YLL <- function (cases = NULL,
   if (is.null(cases)) {
     stop("Cases must be provided")
   }
-  if (is.null(case_fatality)){
-    case_fatality <- parameters[tolower(disease) == tolower(dis) & definition == "case fatality ratio", value]
-    if (length(case_fatality) != 1){
+  if (is.null(case_fatality_ratio)){
+    case_fatality_ratio <- parameters[tolower(disease) == tolower(dis) & definition == "case fatality ratio", value]
+    if (length(case_fatality_ratio) != 1){
       stop("Length is not 1. case fatality ratio must be uniquely determined")
     }
   }
@@ -48,10 +47,10 @@ calculate_YLL <- function (cases = NULL,
   if (sum(dim(cases) == dim(life_exp)) != 2) {
     stop("Dimensions do not match: cases and life expectancy")
   }
-  if (length(case_fatality) == 1) {
-    case_fatality <- rep(case_fatality, nrow(cases))
+  if (length(case_fatality_ratio) == 1) {
+    case_fatality_ratio <- rep(case_fatality_ratio, nrow(cases))
   }
-  YLL <- as.data.frame(lapply(1:ncol(cases), function(x) cases[, x] * case_fatality * life_exp[, x]))
+  YLL <- as.data.frame(lapply(1:ncol(cases), function(x) cases[, x] * case_fatality_ratio * life_exp[, x]))
   names(YLL) <- names(cases)
 
   return (YLL)

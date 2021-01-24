@@ -1,10 +1,10 @@
-Package: CholeraTyphoidIVI
+Package: choleratyphoidivi
 Type: Package
 Title: Vaccine Impact Estimation for Cholera and Typhoid Fever at the National Level
 Version: 0.1.0
 Author: Jong-Hoon Kim
 Maintainer: Jong-Hoon Kim <jonghoon.kim@ivi.int>
-Description: accine impact estimation for cholera and typhoid fever at the national level.
+Description: Vaccine impact evaluation for cholera and typhoid fever at the national level.
     It uses population demography provided by Vaccine Impact Modelling Consortium (VIMC), based
     on United Nations, and implements reduction of cases and deaths through vaccination.
     Reduced cases and deaths are converted to Diability-Adjusted Life Years (DALYs). 

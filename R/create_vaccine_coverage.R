@@ -10,9 +10,9 @@ create_vaccine_coverage <- function(disease = NULL,
                                     country = NULL,
                                     vacc_input = NULL,
                                     routine = TRUE,
-                                    num_row=101,
-                                    num_col=101,
-                                    year=2000:2100){
+                                    num_row = 101,
+                                    num_col = 101,
+                                    year = 2000:2100){
   if (is.null(disease)) {
     stop("Disease name must be provided: cholera or typhoid")
   }
@@ -63,7 +63,10 @@ create_vaccine_coverage <- function(disease = NULL,
       cmp_yr <- cmp[cmp$year == as.integer(yr[j]), ]
       start <- as.integer(cmp_yr$age_first) + 1 # +1 because age starts from zero
       stop <- as.integer(cmp_yr$age_last) + 1
-      vacc_coverage[start:stop, yr[j]] <- as.double(cmp_yr$target) * cmp_yr$coverage / sum(pop[start:stop, yr[j]])
+      # Vaccine coverage may be larger than 1 because target population sizes can be different
+      # This led to the negative population size from the calculation: population size - population protected by vaccine
+      covg <- as.double(cmp_yr$target) * cmp_yr$coverage / sum(pop[start:stop, yr[j]])
+      vacc_coverage[start:stop, yr[j]] <- min(1, covg)
     }
   }
   return(vacc_coverage)
