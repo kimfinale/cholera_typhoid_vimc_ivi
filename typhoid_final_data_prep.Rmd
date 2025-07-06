@@ -1,0 +1,1554 @@
+---
+title: "typhoid_final_data_prep"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+## Save data
+### Make country names consitent accorss dataset using clean country names function
+### First read the data in csv format from inst/extdata/ and and execute d[country := clean_country_names(country)]
+```{r}
+parameters <- fread("inst/extdata/parameters.csv")
+usethis::use_data(parameters, overwrite = T)
+
+parameter_data_tf <- parameters %>% filter(tolower(disease) == tolower("typhoid"))
+usethis::use_data(parameter_data_tf, overwrite = T)
+
+template <- 
+  fread("inst/extdata/central-burden-template.202110gavi-3.Typhoid_IVI-Kim_standard.csv")
+target_countries_tf <- clean_country_names(unique(template$country_name))
+usethis::use_data(target_countries_tf, overwrite = T)
+
+vacc_cov_input_tf <- list()
+vacc_cov_input_tf[[1]] <- vacc_cov_input_routine_tf
+vacc_cov_input_tf[[2]] <- vacc_cov_input_routine_ia2030_tf
+vacc_cov_input_tf[[3]] <- vacc_cov_input_campaign_tf
+vacc_cov_input_tf[[4]] <- vacc_cov_input_campaign_ia2030_tf
+usethis::use_data(vacc_cov_input_tf, overwrite = T)
+
+vacc_scenarios_tf <- 
+  c("novacc", "routine_1", "routine_2", "campaign_1", "campaign_2")
+usethis::use_data(vacc_scenarios_tf, overwrite = T)
+
+# incidence_rate <- fread("inst/extdata/incidence_rate.csv")
+# incidence_rate[, country := clean_country_names(country)]
+# incidence_rate["country"] <- lapply(incidence_rate["country"], function(x) clean_country_names(x))
+# add cholera data
+# cholera_ir <- fread("data/cholera_incidence.csv")
+# cholera_ir$Country <- clean_country_names(cholera_ir$Country)
+# names(cholera_ir) <- c("disease", "country", "incidence_rate_100Kpyo") # to match the names of incidence_rate
+#
+# ir_ty <- incidence_rate[disease == "typhoid", c("disease", "country", "incidence_rate_100Kpyo")]
+# incidence_rate <- rbind(ir_ty, cholera_ir)
+# incidence_rate[disease == "typhoid", disease := "Typhoid"]
+# incidence_rate$country <- clean_country_names(incidence_rate$country)
+
+# incidence_rate[, country := clean_country_names(country)]
+# use_data(incidence_rate, overwrite = T)
+
+# for (i in 1:nrow(gavi201910_int_pop_both)){
+#   incidence_rate$country[i] <- clean_country_names(incidence_rate$country[i])
+# }
+## to make the country name consitent: DR Congo -> "Congo, the Democratic Republic of the"
+# incidence_rate %>% filter(country != "DR Congo") -> ir1
+# incidence_rate %>% filter(country == "DR Congo") %>% mutate(country = "Congo, Democratic Republic of the") -> ir2
+# incidence_rate <- bind_rows(ir1, ir2)
+
+# gavi201910_int_pop_both <- fread("data/201910gavi-5_dds-201910_2_int_pop_both.csv")
+# gavi201910_int_pop_both[, country := clean_country_names(country)]
+# use_data(gavi201910_int_pop_both, overwrite = TRUE)
+
+# life_expectancy_data <-"inst/extdata/202110gavi-2_dds-201910_2_life_ex_both.csv"
+# 
+# life_expectancy <-
+#   fread("inst/extdata/202110gavi-2_dds-201910_2_life_ex_both.csv")
+# life_expectancy[, country := clean_country_names(country)]
+# usethis::use_data(life_expectancy, overwrite = TRUE)
+
+# prop_basic_san <- setDT(prop_basic_san)
+# prop_basic_san[, country := clean_country_names(country)]
+# use_data(prop_basic_san, overwrite = TRUE)
+#
+
+
+# p_dying_age <- fread("data/201910gavi-5_dds-201910_p_dying_both.csv")
+# p_dying_age[, country := clean_country_names(country)]
+# use_data(p_dying_age, overwrite = T)
+#
+# country_name_table <- fread("inst/extdata/country_names.csv")
+# names(country_name_table) <- c("country", "iso3")
+# country_name_table <- country_name_table[1:112,] # remove the bottom row, Total
+# country_name_table[, country := clean_country_names(country)]
+# usethis::use_data(country_name_table, overwrite = T)
+
+# prob_dying_age <- fread('inst/extdata/202110gavi-2_dds-201910_p_dying_both.csv')
+# prob_dying_age$country <- clean_country_names(prob_dying_age$country)
+# usethis::use_data(prob_dying_age, overwrite = T)
+
+
+# population_data <- as.data.frame(fread("outputs/population_wide.csv"))
+# # population_data$country <- clean_country_names(population_data$country)
+# # fwrite(population_data, "outputs/population_wide.csv")
+# usethis::use_data(population_data, overwrite = T)
+# 
+# parameters <- fread("inst/extdata/parameters.csv")
+# usethis::use_data(parameters, overwrite = T)
+
+# # # incidence data
+# incid_data_tf <- fread("inst/extdata/IHME-GBD_2019_DATA-3268a4a1-1.csv")
+# incid_data_tf$country <- clean_country_names(incid_data_typhoid$location)
+# usethis::use_data(incid_data_tf, overwrite = T)
+
+str_dis_severity <- c("Proportion of moderate typhoid fever",
+"Proportion of severe typhoid fever",
+"Proportion of severe typhoid fever with gastrointestinal bleeding",
+"Proportion of typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+usethis::use_data(str_dis_severity, overwrite = T)
+
+str_dis_duration <- c("Duration of moderate typhoid fever",
+"Duration of severe typhoid fever",
+"Duration of severe typhoid fever with gastrointestinal bleeding",
+"Duration of  typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+usethis::use_data(str_dis_duration, overwrite = T)
+
+str_dis_disability <- c("Disability weight for moderate typhoid fever",
+"Disability weight for severe typhoid fever",
+"Disability weight for severe typhoid fever with gastrointestinal bleeding",
+"Disability weight for severe typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+usethis::use_data(str_dis_disability, overwrite = T)
+```
+
+## Overall incidence rate summary
+```{r}
+overall_incid_rate <- fread("inst/extdata/typhoid_incidence_summary.csv")
+overall_incid_rate <- overall_incid_rate[, c(1,3:6)] 
+overall_incid_rate <- overall_incid_rate[3:nrow(overall_incid_rate),] 
+names(overall_incid_rate) <- c("country", "IHME", "Antillon", "Mogasale", "Kim")
+overall_incid_rate$country <- clean_country_names(overall_incid_rate$country )
+
+library(magrittr)
+overall_incid_rate %<>% 
+  mutate(IHME = as.numeric(IHME),
+         Antillon = as.numeric(Antillon),
+         Mogasale = as.numeric(Mogasale),
+         Kim = as.numeric(Kim))  
+
+library(purrr)
+overall_incid_rate %<>%
+ mutate(min = select(., where(is.numeric)) %>% reduce(pmin, na.rm = TRUE),
+        max = select(., where(is.numeric)) %>% reduce(pmax, na.rm = TRUE))
+overall_incid_rate_tf <- overall_incid_rate
+usethis::use_data(overall_incid_rate_tf, overwrite = T)
+```
+
+
+## Vaccine Impact Modeling Consortium data
+```{r}
+
+dis <- "typhoid"
+
+str_dis_severity <- c("Proportion of moderate typhoid fever",
+"Proportion of severe typhoid fever",
+"Proportion of severe typhoid fever with gastrointestinal bleeding",
+"Proportion of typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+
+str_dis_duration <- c("Duration of moderate typhoid fever",
+"Duration of severe typhoid fever",
+"Duration of severe typhoid fever with gastrointestinal bleeding",
+"Duration of  typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+
+str_dis_disability <- c("Disability weight for moderate typhoid fever",
+"Disability weight for severe typhoid fever",
+"Disability weight for severe typhoid fever with gastrointestinal bleeding",
+"Disability weight for severe typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+
+```
+
+## IHME dataset
+```{r}
+incid_number_tf_ihme_2010_2017 <-
+fread("inst/extdata/IHME-GBD_2019_incidence_number_2010_2017.csv")
+incid_number_tf_ihme_2010_2017$location_name <- 
+  clean_country_names(incid_number_tf_ihme_2010_2017$location_name)
+
+incid_number_tf_ihme_2015_2019 <-
+fread("inst/extdata/IHME-GBD_2019_incidence_number_2015_2019.csv")
+incid_number_tf_ihme_2015_2019$location_name <- 
+  clean_country_names(incid_number_tf_ihme_2015_2019$location_name)
+
+incid_number_tf_ihme <- rbind(incid_number_tf_ihme_2010_2017,
+                              incid_number_tf_ihme_2015_2019)
+#
+saveRDS(incid_number_tf_ihme, "outputs/incid_number_tf_ihme.rds")
+usethis::use_data(incid_number_tf_ihme, overwrite = T)
+#
+incid_rate_tf_ihme_2010_2017 <-
+fread("inst/extdata/IHME-GBD_2019_incidence_rate_2010_2017.csv")
+incid_rate_tf_ihme_2010_2017$location_name <- 
+  clean_country_names(incid_rate_tf_ihme_2010_2017$location_name)
+
+incid_rate_tf_ihme_2015_2019 <-
+fread("inst/extdata/IHME-GBD_2019_incidence_rate_2015_2019.csv")
+incid_rate_tf_ihme_2015_2019$location_name <- 
+  clean_country_names(incid_rate_tf_ihme_2015_2019$location_name)
+
+incid_rate_tf_ihme <- rbind(incid_rate_tf_ihme_2010_2017,
+                             incid_rate_tf_ihme_2015_2019)
+saveRDS(incid_rate_tf_ihme, "outputs/incid_rate_tf_ihme.rds")
+usethis::use_data(incid_rate_tf_ihme, overwrite = T)
+
+
+incid_tf_ihme <- rbind(incid_rate_tf_ihme, incid_number_tf_ihme)
+saveRDS(incid_tf_ihme, "outputs/incid_tf_ihme.rds")
+usethis::use_data(incid_tf_ihme, overwrite = T)
+
+death_number_tf_ihme <- fread("inst/extdata/IHME-GBD_2019_death_number_2010_2017.csv")
+death_number_tf_ihme$location_name <- 
+  clean_country_names(death_number_tf_ihme$location_name)
+saveRDS(death_number_tf_ihme, "outputs/death_number_tf_ihme.rds")
+usethis::use_data(death_number_tf_ihme, overwrite = T)
+```
+
+## Vaccine coverage data
+Data files in csv format were downloaded from the VIMC modeling:
+1.	Log on at https://montagu.vaccineimpact.org/
+2.	Select ‘Modellers Contribution Portal’
+
+```{r}
+# library(data.table)
+# vacc_cov_input_routine_tf <- fread("inst/extdata/coverage_202110gavi-3_typhoid-routine-default.csv")
+vacc_cov_input_campaign_tf <- fread("inst/extdata/coverage_202110gavi-3_typhoid-campaign-default.csv")
+# vacc_cov_input_campaign_ia2030_tf <- fread("inst/extdata/coverage_202110gavi-3_typhoid-campaign-ia2030_target.csv")
+# vacc_cov_input_routine_ia2030_tf <- fread("inst/extdata/coverage_202110gavi-3_typhoid-routine-ia2030_target.csv")
+# 
+# vacc_cov_input_routine_tf$country <- clean_country_names(vacc_cov_input_routine_tf$country)
+# vacc_cov_input_campaign_tf$country <- clean_country_names(vacc_cov_input_campaign_tf$country)
+# vacc_cov_input_routine_ia2030_tf$country <- clean_country_names(vacc_cov_input_routine_ia2030_tf$country)
+# vacc_cov_input_campaign_ia2030_tf$country <- clean_country_names(vacc_cov_input_campaign_ia2030_tf$country)
+# 
+# usethis::use_data(vacc_cov_input_routine_tf, overwrite = T)
+# usethis::use_data(vacc_cov_input_campaign_tf, overwrite = T)
+# usethis::use_data(vacc_cov_input_routine_ia2030_tf, overwrite = T)
+# usethis::use_data(vacc_cov_input_campaign_ia2030_tf, overwrite = T)
+```
+
+```{r}
+countries <- unique(vacc_cov_input_routine_tf$country)
+countries <- unique(c(countries, unique(vacc_cov_input_campaign_tf$country)))
+
+cntry <- countries[1]
+
+unique(incid_rate_tf_ihme$year)
+incid_tf_ihme %>% 
+  filter.(metric_name == "Rate", year == 2017, location_name %in% cntry) -> ir_data 
+```
+
+## overall incidence rate over 2000-2100
+```{r}
+# Calculate the incidence rate over the period of 2000-2100 
+# for a given incidence rate in a reference year
+# 1. Calculate the incidence rate of high risk and low risk population
+# for a given year 
+# 2. Calculate incidence rate over the period of 2000-2100 for a series of
+# # risk variables
+
+# calc_incid_rate_by_risk <- function(country, 
+#                                     overall_ir,
+#                                     risk_var,
+#                                     wash_risk_ratio,
+#                                     wash_prop, 
+#                                     ref_year = 2017) {
+#   cntry <- country
+#   rm(country)
+#   prop_low_risk <- 
+#     wash_prop %>% 
+#     filter(country == cntry, year == ref_year) %>% 
+#     pull(risk_var)
+#   
+#   rr <- 
+#     wash_risk_ratio %>% 
+#     filter(var == risk_var) %>% 
+#     pull(risk_ratio)
+#   
+#   ir_high <- overall_ir / (prop_low_risk * rr + (1 - prop_low_risk))
+#   ir_low <- ir_high * rr
+#   
+#   return(list(ir_high = ir_high, ir_low = ir_low))
+# }
+
+
+# ###
+# calc_incid_rate_risk_adj <- function(country,
+#                                     overall_ir,
+#                                     wash_risk_ratio,
+#                                     wash_prop, 
+#                                     ref_year = 2017,
+#                                     population = population_data,
+#                                     incid = incid_tf_ihme) {
+# 
+#   cntry <- country
+#   rm(cntry)
+# 
+#   # age_spec_ir <- calc_age_specific_incid_rate(country = cntry,
+#   #                                        overall_ir = overall_ir,
+#   #                                        ref_year = ref_year,
+#   #                                        population = population,
+#   #                                        incid = incid)
+#   
+#   age_spec_ir_ref <- calc_age_spec_ir_ref_tf(country = cntry, 
+#                              incid = incid_tf_ihme,
+#                              ref_year = 2017)
+#   
+#   age_spec_ir <- age_spec_ir_ref$ir_dist * overall_ir
+# 
+#   # incidence rate adjusted by WASH risk (row) over 2000-2100 (101 column)
+#   incid_rate_adj <- 
+#     data.frame(matrix(NA, nrow = length(age_spec_ir), ncol = 101))
+#   names(incid_rate_adj) <- c(as.character(2000:2100))
+#   
+#   wash_prop %>% filter(country == cntry) -> wash_prop_country
+#   
+#   risk_vars <- wash_risk_ratio$var
+#     
+#   for (i in 1:length(age_spec_ir)) {
+#     ir_adj <- 
+#     data.frame(matrix(NA, nrow = length(risk_vars), ncol = 101 + 1))
+#     names(ir_adj) <- c("WASH_var", as.character(2000:2100))
+#     ir_adj$WASH_var <- risk_vars
+#   
+#     for (rv in risk_vars) {
+#        ir_by_risk <- calc_incid_rate_by_risk(country = cntry,
+#                          overall_ir = age_spec_ir[i],
+#                          wash_risk_ratio = wash_risk_ratio,
+#                          wash_prop = wash_prop, 
+#                          ref_year = 2017, 
+#                          risk_var = rv)
+#       # cat("country =", cntry, ", risk variable =", rv, "\n")
+#       # extract predicted proportion of low-risk people over 2000-2100
+#       wash_prop_country %>% pull(rv) -> prop_low_risk
+#   
+#       ir_adj[ir_adj$WASH_var == rv, 2:102] <- 
+#         ir_by_risk$ir_high * (1 - prop_low_risk) + 
+#         ir_by_risk$ir_low * prop_low_risk
+#       # cat("ir =", ir_ref$ir_high, ir_ref$ir_low, "\n")
+#     }
+#     incid_rate_adj[i, ] <- apply(ir_adj[, 2:102], 2, mean)
+#   }
+#   return (incid_rate_adj)
+# }
+```
+
+## To see the explanability of WASH risk reduction as a factor
+## One approach would be fit a regression model, does it make sense?
+## And then
+```{r}
+templates <- fread("inst/extdata/central-burden-template.202110gavi-2.Typhoid_IVI-Kim_standard.csv")
+
+countries <- unique(templates$country_name)
+cntry <- countries[1]
+
+incid_tf_ihme %>% 
+  filter.(metric_name == "Rate",
+          year %in% c(2010,2015,2017,2019), 
+          location %in% cntry,
+          age == "All Ages") -> ir_data_afg
+
+incid_tf_ihme %>% 
+  filter.(metric_name == "Rate",
+          year %in% c(2010,2015,2017,2019),
+          age == "All Ages") -> ir_data
+
+ir_data
+## extract WASH risk estimates
+params <- fread("inst/extdata/parameters.csv")
+params_wash <- filter(params, source == "Brockett (2020)")
+# params_wash
+#    disease              definition country value
+# 1: Typhoid   Safe water management  common  0.67
+# 2: Typhoid   Improved water source  common  0.73
+# 3: Typhoid            Good hygiene  common  0.52
+# 4: Typhoid         Lack of hygiene  common  2.20
+# 5: Typhoid   Surface water contact  common  1.85
+# 6: Typhoid         Open defecation  common  0.99
+# 7: Typhoid Unsafe waste management  common  1.56
+# 8: Typhoid         Untreated water  common  2.39
+
+wash_prop_ref <- filter(wash_prop, year == 2010)
+# > names(wash_prop_ref)
+#  [1] "year"                     
+#  [2] "country"                  
+#  [3] "at_least_basic_sanitation"
+#  [4] "at_least_basic_water"     
+#  [5] "basic_hygiene"            
+#  [6] "no_open_defecation"       
+#  [7] "no_surface_water"         
+#  [8] "no_unimproved_sanitation" 
+#  [9] "no_unimproved_water"      
+# [10] "safely_managed_water"    
+
+wash_risk_ratio <- data.frame(
+  var = names(wash_prop)[3:10],
+  risk_ratio = c(1/1.56, 0.73, 0.52, 1/0.99, 1/1.85, 1/1.56, 0.73, 0.67))
+
+saveRDS(wash_risk_ratio, "outputs/wash_risk_ratio.rds")
+usethis::use_data(wash_risk_ratio, overwrite = T)
+
+# params_wash$WASH_classification <-
+#   c("safely_managed_water", "no_unimproved_water", 
+#     "basic_hygiene", "basic_hygiene", "no_surface_water",
+#     "no_open_defecation", "basic_hygiene", "no_unimproved_water")
+# 
+# params_wash$param_risk <- c(rep("Protection", 3), rep("Risk", 5))
+
+# Let's match the WASH parameter estimates
+# overall incidence rate is drawn randomly and then
+# age_specific incidence rate is calculated
+# trend of incidence rate is calculated over a multiple variables and mean is then
+# calculated and finally applied to the  
+calc_incid_rate_by_risk <- function(overall_ir,
+                                 wash_risk_ratio,
+                                 wash_prop, 
+                                 country, 
+                                 ref_year = 2017, 
+                                 risk_var) {
+  cntry <- country
+  rm(country)
+  prop_low_risk <- 
+    wash_prop %>% 
+    filter(country == cntry, year == ref_year) %>% 
+    pull(risk_var)
+  
+  rr <- 
+    wash_risk_ratio %>% 
+    filter(var == risk_var) %>% 
+    pull(risk_ratio)
+  
+  ir_high <- overall_ir / (prop_low_risk * rr + (1 - prop_low_risk))
+  ir_low <- ir_high * rr
+  
+  return(list(ir_high = ir_high, ir_low = ir_low))
+}
+
+
+
+countries
+risk_vars <- wash_risk_ratio$var
+
+wash_prop_incid <- expand.grid(year = 2000:2100, 
+                               country = countries)
+wash_prop_incid <- cbind(wash_prop_incid, data.frame(matrix(NA, nrow = nrow(wash_prop_incid), ncol = length(risk_vars))))
+names(wash_prop_incid) <- names(wash_prop)
+
+for (cntry in countries) {
+  for (rv in risk_vars) {
+    ir_ref  <- calc_incid_rate_by_risk(overall_ir,
+                       wash_risk = wash_risk_ratio,
+                       wash_prop = wash_prop, 
+                       country = cntry, 
+                       ref_year = 2017,
+                       risk_var = rv)
+    # cat("country =", cntry, ", risk variable =", rv, "\n")
+    wash_prop %>%
+      filter(country == cntry) %>%
+      select(rv) %>% pull(rv) -> prop_low_risk
+
+    prop_high_risk <- 1 - prop_low_risk
+    ir <- ir_ref$ir_high * prop_high_risk + ir_ref$ir_low * prop_low_risk
+    # cat("ir =", ir_ref$ir_high, ir_ref$ir_low, "\n")
+     
+    wash_prop_incid[wash_prop_incid$country == cntry, ][rv] <- ir  
+    # invisible(readline(prompt = "Press RET to continue"))
+  }
+}
+
+## Visual check 
+# see if the predictions by IHME fall 
+library(ggplot2)
+for (cntry in countries) {
+  cat("country =", cntry, "\n")
+  
+  ir_data %>% filter(country == cntry) -> dat
+  wash_prop_incid %>% filter(country == cntry) %>% 
+    pivot_longer(cols = - c(year, country)) %>% 
+    ggplot(aes(x = year, y = value, color = name)) + 
+    geom_line() + 
+    geom_point(data = dat, aes(x = year, y = val), 
+               inherit.aes = FALSE) +
+    ggtitle(cntry) -> plt
+  print(plt)
+  
+  invisible(readline(prompt = "Press RET to continue"))
+  
+}
+```
+
+
+## Age distribution of typhoid fever cases 
+Reference year is 2017 as the IHME and Yale incidence data sets are based
+IVI dataset 
+```{r}
+# calc_age_dist_tf <- function(country, 
+#                              incid,
+#                              ref_year = 2017, 
+#                              var_name = "val") {
+#   var <- match.arg(var_name, c("val", "upper", "lower"))
+#   incid %>%
+#     filter(metric_name == "Number", location_name == country, year == ref_year) -> dat
+#   
+#   cat_first <- "<1 year"
+#   cat_last <- "95 plus"
+#   age0 <- c(1, seq(5, 90, by = 5))
+#   age1 <- c(4, seq(9, 94, by = 5))
+#   age_cat <- c(paste0(age0, " to ", age1))
+#   
+#   incid_age <- rep(NA, 101) # 0-100 yo by 1 year 
+#   incid_age[1] <- dat %>% filter(age_name == cat_first) %>% pull(val)
+#   incid_age[1] <- dat %>% filter(age_name == cat_first) %>% pull(val)
+#   
+#   for (i in seq_along(age0)) {
+#     dat %>% filter(age_name == age_cat[i]) %>% pull(var) -> case_num
+#     incid_age[(age0[i]+1):(age1[i]+1)] <- case_num / (age1[i] - age0[i] + 1)
+#   } 
+#   dat %>% filter(age_name == cat_last) %>% pull(var) -> case_num
+#   incid_age[96:101] <- case_num / 6
+# 
+#   return (incid_age/sum(incid_age))
+# }
+
+# # incorporated as a separate R function
+# calc_age_spec_ir_ref_tf <- function(country,
+#                              incid,
+#                              ref_year = 2017,
+#                              var_name = "val") {
+#   var <- match.arg(var_name, c("val", "upper", "lower"))
+#   cntry <- country
+#   rm(country)
+# 
+#   incid %>%
+#     filter(metric_name == "Rate", location_name == cntry, year == ref_year) -> dat
+# 
+#   overall_ir <- dat %>% filter(age_name == "All Ages") %>% pull(var)
+# 
+#   cat_first <- "<1 year"
+#   cat_last <- "95 plus"
+#   age0 <- c(1, seq(5, 90, by = 5))
+#   age1 <- c(4, seq(9, 94, by = 5))
+#   age_cat <- c(paste0(age0, " to ", age1))
+# 
+#   ir_age <- rep(NA, 101) # 0-100 yo by 1 year
+#   ir_age[1] <- dat %>% filter(age_name == cat_first) %>% pull(val)
+# 
+#   for (i in seq_along(age0)) {
+#     dat %>% filter(age_name == age_cat[i]) %>% pull(var) -> ir
+#     ir_age[(age0[i]+1):(age1[i]+1)] <- ir
+#   }
+#   dat %>% filter(age_name == cat_last) %>% pull(var) -> ir
+#   ir_age[96:101] <- ir
+# 
+#   ir_dist = ir_age / overall_ir
+#   return (list(ir_dist = ir_dist, overall_ir = overall_ir))
+# }
+
+```
+
+
+
+```{r}
+spread_age_IHME <- function(data, age_total = 101, var_name = "val") {
+  var <- match.arg(var_name, c("val", "upper", "lower"))
+  cat_first <- "<1 year"
+  cat_last <- "95 plus" 
+  # next category starts "1 to 4", "5 to 9", ..., "90 to 94"
+  age0 <- c(1, seq(5, 90, by = 5))
+  age1 <- c(4, seq(9, 94, by = 5))
+  age_cat <- c(paste0(age0, " to ", age1))
+  
+  new_data <- rep(NA, age_total)
+  # new_data[1] <- unlist(data[data$age == cat_first, var])
+  new_data[1] <- 
+    data %>% filter(age_name == cat_first) %>% pull(var)
+  for (ag in age0) {
+    # new_data[(ag+1):(ag+5)] <- 
+    #   unlist(data[data$age == age_cat[which(age0 == ag)], var])
+    new_data[(ag+1):(ag+5)] <- 
+      data %>% filter(age_name == age_cat[which(age0 == ag)]) %>% pull(var)
+  } 
+  # 95-100 age groups were set to be the same as "90 to 94"
+  # new_data[96:age_total] <- new_data[95]
+  new_data[96:age_total] <- 
+    data %>% filter(age_name == cat_last) %>% pull(var)
+  
+  return(new_data)
+}
+
+# calculate the age-specific incidence rate for a given overall incidence rate
+# and age distribution of cases.
+# calculate the overall number of cases and distribute them by age
+# divide by population by age and multiply by 100000
+# this is useful because Yale and IVI incidence rates are given as overall  
+# incidence rates and it is important to have age-specific incidence rate as 
+# vaccination programs and therefore impact are age-dependent
+
+# get then age-specific cases from the IHME data and calculate the age distribution
+
+calc_age_spec_incid_rate <- function(country,
+                                     overall_ir,
+                                     ref_year = 2017, 
+                                     population, 
+                                     incid){
+  cntry <- country
+  rm(country)
+  incid %>% 
+    filter(metric_name == "Rate", location_name == cntry, year == ref_year) %>% 
+    pull(val) -> d
+  
+  # age distribution based on the IHME dataset given a year and country
+  age_dist <- calc_age_dist_tf(country = cntry, 
+                               incid = incid,
+                               ref_year = ref_year)
+  population %>%
+    filter(country == cntry) %>%
+    pull(as.character(ref_year)) -> pop_data
+  
+  total_case <- sum(pop_data) * overall_ir / 1e5
+  age_specific_case <- total_case * age_dist
+  age_speicific_ir <- age_specific_case / pop_data * 1e5
+  
+  return(age_speicific_ir)
+}
+# calc_age_specific_incid_rate(country = cntry,
+#                                          overall_ir = 150,
+#                                          ref_year = 2017, 
+#                                          population = population_data, 
+#                                          incid = incid_tf_ihme)
+
+
+  ir_risk_year <- calc_incid_rate_risk_adj(country = cntry,
+                         overall_ir = overall_ir,
+                         wash_risk_ratio = wash_risk_ratio,
+                         wash_prop = wash_prop, 
+                         ref_year = 2017)
+
+  ir_year <- apply(ir_risk_year[, 2:102], 2, mean)
+  
+  
+calc_age_spec_incid_rate <- function(country,
+                                     incid_rate_year,
+                                     ref_year = 2017, 
+                                     population = population_data, 
+                                     incid = incid_tf_ihme) {
+  cntry <- country
+  rm(country)
+  # age distribution based on the IHME dataset given a year and country
+  age_dist_ref <- calc_age_dist_tf(country = cntry, 
+                               incid = incid,
+                               ref_year = ref_year)
+
+
+  population %>% filter(country == cntry) -> pop_data
+  total_case <- colSums(pop_data[, 3:103]) * ir_year / 1e5
+  
+  
+  
+  age_specific_case <- age_dist_ref %*% t(total_case)
+  
+  
+
+  population %>%
+    filter(country == cntry) %>%
+    pull(as.character(ref_year)) -> pop_data
+  
+  
+  total_case <- colSums(pop_data) * overall_ir / 1e5
+  age_specific_case <- total_case * age_dist_ref
+  age_speicific_ir <- age_specific_case / pop_data * 1e5
+  return(age_speicific_ir)
+}
+
+
+for (i in 1:100) {
+  message(pop_data[1,i+2]/sum(pop_data[,i+2]))
+}
+```
+
+
+```{r}
+for (i in 1:ncol(burden)) {
+  burden[, i] <- population[, i] / 1e5 *
+    (prop_high_risk$prop[i] * ir_high + (1 - prop_high_risk$prop[i]) * ir_low)
+}
+
+fit <- readRDS("outputs/fit_at_least_basic_water_20211108.rds")
+# fit <- readRDS("outputs/fit_no_surface_water_20211108.rds")
+# fit <- readRDS("outputs/fit_no_unimproved_water_20211108.rds")
+
+prop_high_risk  <- prop_basic_san
+prop_high_risk[, prop := 1 - prop]
+# to see if the incidence after 2010 (i.e., 2015 and 2019) can be predicted 
+# through risk
+
+parameters %>% 
+  filter(tolower(disease) == dis) %>% 
+  filter(definition == "relative risk of infection from at least basic sanition") %>%
+  select(value) %>% 
+  unlist() -> rr
+
+rr <- 1 / rr # make the relative risk for the high-risk group
+
+year_risk_ref <- 2010 
+prop_hr_ref <- prop_high_risk[country == cntry & year == year_risk_ref, prop]
+ir_low <- incidence_rate / (prop_hr_ref * risk_ratio + (1 - prop_hr_2015))
+ir_high <- ir_low * risk_ratio
+for (i in 1:ncol(burden)) {
+  burden[, i] <- population[, i] / 1e5 *
+    (prop_high_risk$prop[i] * ir_high + (1 - prop_high_risk$prop[i]) * ir_low)
+}
+
+```
+
+
+
+
+## Population with improved water or sanitationat risk of cholera or typhoid fever
+ 
+We assume that people who have at least basic sanitation have reduced risk for typhoid fever. We used the WaSH data from [JMP (2000-2017)](https://washdata.org/data/downloads#WLD) to fit a saturating exponential function to roughly estimate the trend of WASH.
+
+The data in Excel worksheet format has 4 tabs: introduction and 3 data sheets (water, sanitation, and hygiene). The data file was opened in MS Excel and each data tab was saved as csv (JMP2019_WLD_water.csv, JMP2019_WLD_sanitation.csv, JMP2019_WLD_hygiene.csv)
+## risk factor
+```{r}
+devtools::load_all()
+library(data.table)
+## Read the Montagu file and get the list of countires for modeling
+templates <- fread("inst/extdata/central-burden-template.202110gavi-2.Typhoid_IVI-Kim_standard.csv")
+target_countries <- clean_country_names(unique(templates$country_name))
+
+# dat <- fread("inst/extdata/JMP_2021_WLD_Sanitation.csv")
+dat <- fread("inst/extdata/JMP_2021_WLD_Water.csv")
+
+# dat <- dat[-c(1,2,4179,4180), c(1,3,6:9)] # after viewing the file, rows and columns were decided.
+dat <- dat[-c(1,2,4179,4180), c(1,3,21)] # after viewing the file, rows and columns were decided.
+
+# names(dat) <- c("country", "year", "at_least_basic", "limited", 
+#                "unimproved", "open_defecation")
+
+# names(dat) <- c("country", "year", "at_least_basic", "limited",
+#                 "unimproved", "surface_water")
+
+# names(dat) <- c("country", "year", "at_least_basic", "limited",
+#                 "unimproved", "surface_water")
+
+names(dat) <- c("country", "year", "safely_managed")
+
+dat[, year := as.double(year)]
+dat[, country := clean_country_names(country)]
+dat <- as.data.frame(dat)
+## Clean data set
+for(i in 1:nrow(dat)){
+  for(j in 1:ncol(dat)){
+    val <- dat[i, j]
+    cat("i =", i, "j =", j, "val =", val,"\n")
+    if(!is.na(val)){
+      if(val == "<1") {
+        dat[i, j] <- 0.5 # take the mid point (0.5) if it is less than 1
+      }
+      if(val == "-") {
+        dat[i, j] <- NA
+      }
+      if(val == ">99") {
+        dat[i, j] <- 99.5 # take the mid point if larger than 99
+      }
+    }
+  }
+}
+
+dat_ <- dat
+# varname <- "at_least_basic"
+varname <- "safely_managed"
+# eval(parse(text = text)
+dat <- dat_[, c("country", "year", varname)]
+# dat <- dat_[!is.na(eval(parse(text = var))),]
+dat <- dat[complete.cases(dat), ]
+
+## for all of the countries on the list
+cntries <- unique(dat$country)
+
+## optim fit
+## multiple initial values are used and the best fit (minimum value) is chosen
+starts <- 
+  pomp::sobol_design(lower = c(par1 = 1900, par2 = 1e-6),
+                     upper = c(par1 = 2000, par2 = 1), nseq = 10)
+
+
+saturaing_exp <- function (x, pars) {
+  1 - exp(-pars[2] * (x - pars[1]))
+}
+
+# # sum of squares
+# ssq <- function(theta, x){
+#   val <- x[,2]
+#   year <- x[,1]
+#   tau <- theta[1]
+#   # k <- theta[2]/(1-theta[2])
+#   k <- theta[2]
+#   sum((val - (1 - exp(-k * (year - tau))))^2)
+# }
+
+ssq <- function(theta, x){
+  val <- x[,2]
+  year <- x[,1]
+  tau <- theta[1]
+  # k <- theta[2]/(1-theta[2])
+  k <- theta[2]
+  sum((val - saturaing_exp(year, c(tau,k)))^2)
+}
+
+fitres <- list()
+
+for (i in 1:length(cntries)) {
+  cntry <- cntries[i]
+  message(paste0("i = ", i, ", country = ", cntry))
+  # x <- dat[country == cntry, .(year, open_defecation = 1 - as.double(open_defecation)/100)]
+  # x <- dat[country == cntry, .(year, at_least_basic = as.double(at_least_basic) / 100)]
+  # x <- dat[country == cntry, .(year, limited = 1 - (as.double(limited) / 100))]
+  # x <- dat[country == cntry, .(year, improved = 1 - (as.double(unimproved) / 100))]
+  
+  # x <- dat[dat$country == cntry, c("year", "open_defecation")]
+  # x$no_open_defecation <- 1 - as.double(x$open_defecation)/100
+  # x <-  x[, c("year", "no_open_defecation")]
+
+  # x <- dat[dat$country == cntry, c("year", "unimproved")]
+  # x$no_unimproved <- 1 - as.double(x$unimproved)/100
+  # x <-  x[, c("year", "no_unimproved")]
+
+  x <- dat[dat$country == cntry, c("year", varname)]
+  
+  var <- paste0("x$", varname)
+  eval(parse(text = paste0(var, " <- ", "as.double(", var, ")/100")))
+  x <-  x[, c("year", varname)]
+  
+  # newvarname <- paste0("no_", varname)
+  # oldvar <- paste0("x$", varname)
+  # newvar <- paste0("x$", newvarname)
+  # eval(parse(text = paste0(newvar, " <- ", "1 - as.double(", oldvar, ")/100")))
+  # x <-  x[, c("year", newvarname)]
+  
+  fitvals <- rep(NA, nrow(starts))
+  fitlist <- list()
+  for(j in 1:nrow(starts)){ # multiple starting points to ensure a good fit
+    f <- optim(
+      par = c(starts$par1[j], starts$par2[j]),
+      fn = ssq,
+      x = x,
+      hessian = TRUE,
+      control = list(trace = 0))
+    fitvals[j] <- f$value
+    fitlist[[j]] <- f
+  }
+  fit <- fitlist[[which(fitvals == min(fitvals))]]
+  fitres[[i]] <- fit
+  fitres[[i]]$country <- cntry 
+}
+
+# check the fit by plotting
+for (i in seq_along(cntries)) {  
+  cntry <- cntries[i]
+  cat("i =", i , "/", length(cntries), "\n")
+  # d <- dat[country == cntries[i], .(year, open_defecation = 1 - open_defecation)]
+    # d <- dat[country == cntries[i], .(year, at_least_basic = as.double(at_least_basic) / 100)]
+  # d <- dat[country == cntry, .(year, limited = 1 - (as.double(limited) / 100))]
+  # d <- dat[country == cntry, .(year, improved = 1 - (as.double(unimproved) / 100))]
+  
+  # x <- dat[dat$country == cntry, c("year", "open_defecation")]
+  # x$no_open_defecation <- 1 - as.double(x$open_defecation)/100
+  # x <-  x[, c("year", "no_open_defecation")]
+  
+  # x <- dat[dat$country == cntry, c("year", "unimproved")]
+  # x$no_unimproved <- 1 - as.double(x$unimproved)/100
+  # x <-  x[, c("year", "no_unimproved")]
+  # decreasing pattern in Benin, Cuba, DRC, Eritrea, Ethiopia, Gambia, 
+  # Guinea-Bissau, Morocco, Mozambique, Somalia, Sudan, Yemen, Zimbabwe
+  
+  x <- dat[dat$country == cntry, c("year", varname)]
+
+  # newvarname <- paste0("no_", varname)
+  # oldvar <- paste0("x$", varname)
+  # newvar <- paste0("x$", newvarname)
+  # eval(parse(text = paste0(newvar, " <- ", "1 - as.double(", oldvar, ")/100")))
+  # x <-  x[, c("year", newvarname)]
+  
+  var <- paste0("x$", varname)
+  eval(parse(text = paste0(var, " <- ", "as.double(", var, ")/100")))
+  x <-  x[, c("year", varname)]
+  
+  # no_surface_water : decreasing pattern in Eritrea, Grenada, Lesotho
+  # no_unimproved_water: decreasing pattern in Angola, CAR, DPRK, 
+  # Equatorial Guinea, Madagascar, Solomon Islands,
+  # at_least_basic sanitation: decreasing pattern in American Samoa, CAR, DRC,
+  # Wallis and Futuna Islands, Zimbabwe
+  # at_least_basic water: decreasing pattern in Burkina Faso, CAR, Comoros,
+  # DPRK, Solomon Islands, Zimbabwe
+  # safely_managed: decreasing pattern in French Polynesia, Nepal,
+  
+  yr <- 2000:2100
+  plot(yr, 1 - exp(-fitres[[i]]$par[[2]] * (yr - fitres[[i]]$par[[1]])), type='l',
+       main = cntries[i], ylim=c(0,1))
+  points(x[[1]], x[[2]], col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+# calculate standard errors of the parameter estimates
+for (i in seq_along(fitres)){
+  cat("i =", i , "/", length(cntries), "\n")
+  try(if(det(fitres[[i]]$hessian) > 0){
+    fitres[[i]]$stderr <- sqrt(abs(diag(solve(fitres[[i]]$hessian))))
+  } else {
+    fitres[[i]]$stderr <- NA
+  }, TRUE)
+}
+
+tstamp <- format(Sys.time(), "%Y%m%d")
+saveRDS(fitres, paste0("outputs/fit_", varname, "_", "water_", tstamp, ".rds"))
+```
+
+## create proportion by year based on the fit
+```{r}
+fls <- list.files("outputs/", "^fit.*20211108.*rds", full.names = TRUE)
+fls
+# [1] "outputs/fit_at_least_basic_sanitation_20211108.rds"
+# [2] "outputs/fit_at_least_basic_water_20211108.rds"     
+# [3] "outputs/fit_basic_hygiene_20211108.rds"            
+# [4] "outputs/fit_no_open_defecation20211108.rds"        
+# [5] "outputs/fit_no_surface_water_20211108.rds"         
+# [6] "outputs/fit_no_unimproved_sanitation_20211108.rds" 
+# [7] "outputs/fit_no_unimproved_water_20211108.rds"      
+# [8] "outputs/fit_safely_managed_water_20211108.rds"        
+cntries <- c()
+for (i in 1:length(fls)) {
+  fit <- readRDS(fls[i])
+  cntries <- c(cntries, sapply(1:length(fit), function(x) fit[[x]]$country))
+}
+cntries <- unique(cntries)
+cntries <- clean_country_names(cntries)
+yr <- 2000:2100
+wash_prop <- expand.grid(year = yr, country = cntries)
+library(stringr)
+
+for (i in seq_along(fls)) {
+  fl <- fls[i]
+  var <- str_sub(fl, 13, -14)
+  eval(parse(text = paste0("wash_prop$", var, " <- NA")))
+  fits <- readRDS(fl)
+  country <- sapply(1:length(fits), function(x) fits[[x]]$country)
+  country <- clean_country_names(country)
+  for (j in seq_along(country)) {
+    cat("j =", j, ", country =", country[j], "\n")
+    pars <- fits[[j]]$par
+    #use try because some of the parameter will be 
+    try(eval(parse(text = paste0("wash_prop[wash_prop$country == country[j], ]$", var, " = saturaing_exp(x = yr, params = pars)"))), FALSE)
+  }
+}
+
+wash_prop$country <- as.character(wash_prop$country)
+wash_prop$country <- clean_country_names(wash_prop$country)
+fwrite(wash_prop, "outputs/wash_prop.csv")
+saveRDS(wash_prop, "outputs/wash_prop.rds")
+usethis::use_data(wash_prop, overwrite = TRUE)
+```
+
+
+
+```{r}
+# stderr <- sqrt(abs(diag(solve(fit$hessian))))
+# R0_CI <- fit$par["R0"] + c(-1,1)*1.96*stderr["R0"]
+# k_CI <- fit$par["k"] + c(-1,1)*1.96*stderr["k"]
+
+## create proportion by year based on the fit
+fitlist <- readRDS("outputs/fit_1_minus_open_defecation20210813T200404.rds")
+prop_no_open_defecation <- setDT(expand.grid(year = 2000:2100, country = target_countries))
+prop_no_open_defecation[, pred := 0]
+
+for (i in seq_along(target_countries)) {
+  pars <- fitlist[[i]]$par
+  prop_no_open_defecation[country == target_countries[i], pred := (1 - exp(-pars[2] * (year - pars[1])))]
+}
+## Remove negative values
+prop_no_open_defecation[, pred := pmax(pred, 0)]
+
+names(prop_no_open_defecation) <- c("year", "country", "prop")# check the order! 
+usethis::use_data(prop_no_open_defecation, overwrite = TRUE)
+# fwrite(prop_no_open_defecation, "outputs/prop_no_open_defecation.csv")
+ 
+# prop_basic_san <- setDT(expand.grid(year = 2000:2100, country = target_countries))
+# prop_basic_san$pred <- 0
+# 
+# for (i in seq_along(target_countries)) {
+#   prop_basic_san[country == target_countries[i], pred := (1 - exp(-fit[i,2] * (year - fit[i, 1])))]
+#   # san %>% filter(country == target_countries[i]) %>% 
+#   #   mutate(pred = (1 - exp(-fit[i,2] * (year - fit[i, 1])))) -> san
+# }
+# ## Remove negative values
+# prop_basic_san[, pred := pmax(pred, 0)]
+#   
+## take the mean over the previous years 
+
+
+## For countries where no data are available, we take the mean of all countries
+## for which proportion of population is available from year 2000 onwards
+mean2000 <- prop_basic_san[year == 2000, mean(pred)]
+nodata <- c(11, 23, 64, 65, 84)
+for (i in seq_along(nodata)) {
+  id <- nodata[i]
+  prop_basic_san[country == target_countries[id], pred := rep(mean2000, 101)]
+}
+## check again if values are reasonable by plotting them
+for (i in seq_along(target_countries)) {  
+  cat("i =", i , "/", length(target_countries), "\n")
+  dsan <- d[country == target_countries[i]] 
+  pred <- prop_basic_san[country == target_countries[i]] 
+  plot(pred$year, pred$pred, type='l', main = target_countries[i])
+  points(dsan$year, dsan$prop, col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+#
+## Congo, Republic of the missing and fitting again
+dsan <- d[country == "Congo, Republic of the"]
+fit <- saturating_exp_fit(x = dsan, 
+                          start = c(2000, 1e-1),
+                          lower = c(1e-6, 1e-6),
+                          upper = c(2100-1e-3, 10)) 
+
+prop_basic_san_congo <- data.frame(year = 2000:2100, country = "Congo, Republic of the", prop = NA)
+prop_basic_san_congo$prop <- 1 - exp(-fit[2] * (prop_basic_san_congo$year - fit[1]))
+
+plot(prop_basic_san_congo$year, prop_basic_san_congo$prop, type='l', main = unique(dsan$country))
+points(dsan$year, dsan$prop, col=2)
+prop_basic_san <- rbind(prop_basic_san, prop_basic_san_congo)
+
+names(prop_basic_san) <- c("year", "country", "prop")# check the order! 
+usethis::use_data(prop_basic_san, overwrite = TRUE)
+```
+
+
+
+
+
+
+
+```{r}
+# stderr <- sqrt(abs(diag(solve(fit$hessian))))
+# R0_CI <- fit$par["R0"] + c(-1,1)*1.96*stderr["R0"]
+# k_CI <- fit$par["k"] + c(-1,1)*1.96*stderr["k"]
+
+## create proportion by year based on the fit
+fitlist <- readRDS("outputs/fit_1_minus_open_defecation20210813T200404.rds")
+prop_no_open_defecation <- setDT(expand.grid(year = 2000:2100, country = target_countries))
+prop_no_open_defecation[, pred := 0]
+
+for (i in seq_along(target_countries)) {
+  pars <- fitlist[[i]]$par
+  prop_no_open_defecation[country == target_countries[i], pred := (1 - exp(-pars[2] * (year - pars[1])))]
+}
+## Remove negative values
+prop_no_open_defecation[, pred := pmax(pred, 0)]
+
+names(prop_no_open_defecation) <- c("year", "country", "prop")# check the order! 
+usethis::use_data(prop_no_open_defecation, overwrite = TRUE)
+# fwrite(prop_no_open_defecation, "outputs/prop_no_open_defecation.csv")
+ 
+# prop_basic_san <- setDT(expand.grid(year = 2000:2100, country = target_countries))
+# prop_basic_san$pred <- 0
+# 
+# for (i in seq_along(target_countries)) {
+#   prop_basic_san[country == target_countries[i], pred := (1 - exp(-fit[i,2] * (year - fit[i, 1])))]
+#   # san %>% filter(country == target_countries[i]) %>% 
+#   #   mutate(pred = (1 - exp(-fit[i,2] * (year - fit[i, 1])))) -> san
+# }
+# ## Remove negative values
+# prop_basic_san[, pred := pmax(pred, 0)]
+#   
+## take the mean over the previous years 
+
+
+## For countries where no data are available, we take the mean of all countries
+## for which proportion of population is available from year 2000 onwards
+mean2000 <- prop_basic_san[year == 2000, mean(pred)]
+nodata <- c(11, 23, 64, 65, 84)
+for (i in seq_along(nodata)) {
+  id <- nodata[i]
+  prop_basic_san[country == target_countries[id], pred := rep(mean2000, 101)]
+}
+## check again if values are reasonable by plotting them
+for (i in seq_along(target_countries)) {  
+  cat("i =", i , "/", length(target_countries), "\n")
+  dsan <- d[country == target_countries[i]] 
+  pred <- prop_basic_san[country == target_countries[i]] 
+  plot(pred$year, pred$pred, type='l', main = target_countries[i])
+  points(dsan$year, dsan$prop, col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+#
+## Congo, Republic of the missing and fitting again
+dsan <- d[country == "Congo, Republic of the"]
+fit <- saturating_exp_fit(x = dsan, 
+                          start = c(2000, 1e-1),
+                          lower = c(1e-6, 1e-6),
+                          upper = c(2100-1e-3, 10)) 
+
+prop_basic_san_congo <- data.frame(year = 2000:2100, country = "Congo, Republic of the", prop = NA)
+prop_basic_san_congo$prop <- 1 - exp(-fit[2] * (prop_basic_san_congo$year - fit[1]))
+
+plot(prop_basic_san_congo$year, prop_basic_san_congo$prop, type='l', main = unique(dsan$country))
+points(dsan$year, dsan$prop, col=2)
+prop_basic_san <- rbind(prop_basic_san, prop_basic_san_congo)
+
+names(prop_basic_san) <- c("year", "country", "prop")# check the order! 
+usethis::use_data(prop_basic_san, overwrite = TRUE)
+```
+
+
+## WASH protective factor
+```{r}
+devtools::load_all()
+library(data.table)
+## Read the Montagu file and get the list of countires for modeling
+templates <- fread("inst/extdata/central-burden-template.202110gavi-2.Typhoid_IVI-Kim_standard.csv")
+target_countries <- clean_country_names(unique(templates$country_name))
+
+# dat <- fread("inst/extdata/JMP_2021_WLD_Sanitation.csv")
+dat <- fread("inst/extdata/JMP_2021_WLD_Water.csv")
+# dat <- fread("inst/extdata/JMP_2021_WLD_Hygiene.csv")
+
+# dat <- dat[-c(1,2,4179,4180), c(1,3,6:9)] # after viewing the file, rows and columns were decided.
+## for hygiene
+dat <- dat[-c(1,2,4179,4180), c(1,3,6:8)] # after viewing the file, rows and columns were decided.
+
+# names(dat) <- c("country", "year", "at_least_basic", "limited", 
+#                 "unimproved", "open_defecation")
+
+# names(dat) <- c("country", "year", "at_least_basic", "limited", 
+#                 "unimproved", "surface_water")
+
+names(dat) <- c("country", "year", "basic", "limited", "no_facility")
+
+dat[, year := as.double(year)]
+dat[, country := clean_country_names(country)]
+dat <- as.data.frame(dat)
+## Clean data set
+for(i in 1:nrow(dat)){
+  for(j in 1:ncol(dat)){
+    val <- dat[i, j]
+    cat("i =", i, "j =", j, "val =", val,"\n")
+    if(!is.na(val)){
+      if(val == "<1") {
+        dat[i, j] <- 0.5 # take the mid point (0.5) if it is less than 1
+      }
+      if(val == "-") {
+        dat[i, j] <- NA
+      }
+      if(val == ">99") {
+        dat[i, j] <- 99.5 # take the mid point if larger than 99
+      }
+    }
+  }
+}
+
+dat_ <- dat
+# dat <- setDT(dat)
+varname <- "basic"
+# eval(parse(text = text)
+# var <- paste0("dat_$", varname)
+
+dat <- dat_[, c("country", "year", varname)]
+# dat <- dat_[!is.na(eval(parse(text = var))),]
+dat <- dat[complete.cases(dat), ]
+
+## for all of the countries on the list
+cntries <- unique(dat$country)
+
+## optim fit
+## multiple initial values are used and the best fit (minimum value) is chosen
+starts <- 
+  pomp::sobol_design(lower = c(par1 = 1900, par2 = 1e-6),
+                     upper = c(par1 = 2000, par2 = 1), nseq = 10)
+
+# sum of squares
+ssq <- function(theta, x){
+  val <- x[,2]
+  year <- x[,1]
+  tau <- theta[1]
+  # k <- theta[2]/(1-theta[2])
+  k <- theta[2]
+  sum((val - (1 - exp(-k * (year - tau))))^2)
+}
+
+fitres <- list()
+
+for (i in 1:length(cntries)) {
+  cntry <- cntries[i]
+  message(paste0("i = ", i, ", country = ", cntry))
+  # x <- dat[country == cntry, .(year, open_defecation = 1 - as.double(open_defecation)/100)]
+  # x <- dat[country == cntry, .(year, at_least_basic = as.double(at_least_basic) / 100)]
+  # x <- dat[country == cntry, .(year, limited = 1 - (as.double(limited) / 100))]
+  # x <- dat[country == cntry, .(year, improved = 1 - (as.double(unimproved) / 100))]
+  
+  # x <- dat[dat$country == cntry, c("year", "open_defecation")]
+  # x$no_open_defecation <- 1 - as.double(x$open_defecation)/100
+  # x <-  x[, c("year", "no_open_defecation")]
+
+  # x <- dat[dat$country == cntry, c("year", "unimproved")]
+  # x$no_unimproved <- 1 - as.double(x$unimproved)/100
+  # x <-  x[, c("year", "no_unimproved")]
+
+  x <- dat[dat$country == cntry, c("year", varname)]
+  var <- paste0("x$", varname)
+  eval(parse(text = paste0(var, " <- ", "as.double(", var, ")/100")))
+
+  fitvals <- rep(NA, nrow(starts))
+  fitlist <- list()
+  for(j in 1:nrow(starts)){ # multiple starting points to ensure a good fit
+    f <- optim(
+      par = c(starts$par1[j], starts$par2[j]),
+      fn = ssq,
+      x = x,
+      hessian = TRUE,
+      control = list(trace = 0))
+    fitvals[j] <- f$value
+    fitlist[[j]] <- f
+    
+  }
+  fit <- fitlist[[which(fitvals == min(fitvals))]]
+  fitres[[i]] <- fit
+  fitres[[i]]$country <- cntry 
+}
+
+# check the fit by plotting
+for (i in seq_along(cntries)) {  
+  cntry <- cntries[i]
+  cat("i =", i , "/", length(cntries), "\n")
+  # d <- dat[country == cntries[i], .(year, open_defecation = 1 - open_defecation)]
+    # d <- dat[country == cntries[i], .(year, at_least_basic = as.double(at_least_basic) / 100)]
+  # d <- dat[country == cntry, .(year, limited = 1 - (as.double(limited) / 100))]
+  # d <- dat[country == cntry, .(year, improved = 1 - (as.double(unimproved) / 100))]
+  
+  # x <- dat[dat$country == cntry, c("year", "open_defecation")]
+  # x$no_open_defecation <- 1 - as.double(x$open_defecation)/100
+  # x <-  x[, c("year", "no_open_defecation")]
+  
+  # x <- dat[dat$country == cntry, c("year", "unimproved")]
+  # x$no_unimproved <- 1 - as.double(x$unimproved)/100
+  # x <-  x[, c("year", "no_unimproved")]
+  # decreasing pattern in Benin, Cuba, DRC, Eritrea, Ethiopia, Gambia, 
+  # Guinea-Bissau, Morocco, Mozambique, Somalia, Sudan, Yemen, Zimbabwe
+   
+  # x <- dat[dat$country == cntry, c("year", varname)]
+  # newvarname <- paste0("no_", varname)
+  # oldvar <- paste0("x$", varname)
+  # newvar <- paste0("x$", newvarname)
+  # eval(parse(text = paste0(newvar, " <- ", "1 - as.double(", oldvar, ")/100")))
+  # x <-  x[, c("year", newvarname)]
+  # no_surface_water : decreasing pattern in Eritrea, Grenada, Lesotho
+  # no_unimproved_water: decreasing pattern in Angola, CAR, DPRK, 
+  # Equatorial Guinea, Madagascar, Solomon Islands,
+
+  x <- dat[dat$country == cntry, c("year", varname)]
+  var <- paste0("x$", varname)
+  eval(parse(text = paste0(var, " <- ", "as.double(", var, ")/100")))
+  # basic hygiene: decreasing pattern in Malawi, Sudan, 
+  
+  yr <- 2000:2100
+  plot(yr, 1 - exp(-fitres[[i]]$par[[2]] * (yr - fitres[[i]]$par[[1]])), type='l',
+       main = cntries[i], ylim=c(0,1))
+  points(x[[1]], x[[2]], col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+# calculate standard errors of the parameter estimates
+for (i in seq_along(fitres)){
+  cat("i =", i , "/", length(cntries), "\n")
+  try(if(det(fitres[[i]]$hessian) > 0){
+    fitres[[i]]$stderr <- sqrt(abs(diag(solve(fitres[[i]]$hessian))))
+  } else {
+    fitres[[i]]$stderr <- NA
+  }, TRUE)
+}
+
+tstamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+saveRDS(fitres, paste0("outputs/fit_", varname, "_", "hygiene_", tstamp, ".rds"))
+```
+
+## Case fatality ratio
+Case fatality ratio was calculated from predicted incidence and deaths extracted from IHME data set. We downloaded the data from the IHME GBD results tool at http://ghdx.healthdata.org/gbd-results-tool. These are, however, model predictions may lead to some weird values (over 1), in which case  
+
+We used the case fatality ratio (CFR) based on the recent systematic review and meta-analysis (Marchello et al. 2020 J Infect). 
+The CFR was meta-analyzed based on the varying number of studies and c
+
+We generated based on log normal 
+```{r}
+devtools::load_all()
+for (cntry in target_countries_tf) {
+  cfr <- calc_cfr(cntry)
+  plot(1:length(cfr), cfr, main = cntry)
+  abline(h = c(0, 1), col = "red", lty = 3)
+  # points(1:length(cfr), cfr, main = cntry)
+  # abline(h = c(0, 1), col = "red", lty = 3)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+cfr <- calc_cfr(cntry, ref_year = 2010)
+plot(cfr)
+# country <- "Central African Republic"
+# ref_year <- 2010 
+incid_number_tf_ihme %>%
+  filter(location_name == country, year == ref_year) -> id
+death_number_tf_ihme %>%
+  filter(location_name == country, year == ref_year) -> dd
+
+
+
+  # Get the age name of the data set in order according to the age category
+  # that was just created
+ind <- rep(NA, length(age_cat))
+for(i in 1:length(age_cat)) {
+  ind[i] <- which(dd$age_name == age_cat[i])
+}
+cfr <- dd[ind, ]$val / id[ind, ]$val
+plot(cfr)
+
+# IHME results age category
+age0 <- c(1, seq(5, 90, by = 5))
+age1 <- c(4, seq(9, 94, by = 5))
+age_cat <- c("<1 year", paste0(age0, " to ", age1), "95 plus")
+ref_year <- 2010
+# cntry <- "Armenia"
+for (cntry in target_countries_tf) {
+  incid_number_tf_ihme %>%
+    filter(location_name == cntry, year == ref_year) -> id
+  death_number_tf_ihme %>%
+    filter(location_name == cntry, year == ref_year) -> dd
+
+  cfr <- rep(NA, length(age_cat))
+  for (i in 1:length(age_cat)) {  
+    ag <- age_cat[i]
+    cfr[i] <- dd[dd$age_name == ag,]$val / id[id$age_name == ag,]$val
+  }
+  plot(cfr, main = cntry)
+  abline(h = c(0, 1), col = "red", lty = 3)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+
+
+```
+
+### To used the estimate that varies by only by region
+```{r}
+devtools::load_all()
+template <- 
+  fread("inst/extdata/central-burden-template.202110gavi-3.Typhoid_IVI-Kim_standard.csv")
+countries <- unique(template$country_name)
+
+library(data.table)
+cntry_region <- fread("data/Country_List.csv")
+cntry_region$COUNTRY <- clean_country_names(cntry_region$COUNTRY)
+library(dplyr)
+cntry <- data.frame(COUNTRY = clean_country_names(countries))
+cntry_region2 <- left_join(cntry, cntry_region, by = "COUNTRY")
+cntry_region2[cntry_region2$COUNTRY == "Micronesia, Federated States of",]$SUB_REGION <- "South-Eastern Asia"
+cntry_region2[cntry_region2$COUNTRY == "Micronesia, Federated States of",]$REGION <- "OCEANIA"
+cntry_region2[cntry_region2$COUNTRY == "Korea, Democratic People's Republic of",]$SUB_REGION <- "Eastern Asia"
+cntry_region2[cntry_region2$COUNTRY == "Korea, Democratic People's Republic of",]$REGION <- "ASIA"
+
+unique(cntry_region2$REGION)
+# [1] "ASIA"                           
+# [2] "AFRICA"                         
+# [3] "EUROPE"                         
+# [4] "LATIN AMERICA AND THE CARIBBEAN"
+# [5] "OCEANIA"  
+unique(cntry_region2$SUB_REGION)
+#  [1] "Southern Asia"        
+#  [2] "Middle Africa"        
+#  [3] "Southern Europe"      
+#  [4] "Western Asia"         
+#  [5] "Eastern Africa"       
+#  [6] "Western Africa"       
+#  [7] "Central America"      
+#  [8] "South America"        
+#  [9] "Caribbean"            
+# [10] "Australia/New Zealand"
+# [11] "South-Eastern Asia"   
+# [12] "Central Asia"         
+# [13] "Micronesia"           
+# [14] "Southern Africa"      
+# [15] "Northern Africa"      
+# [16] "Eastern Europe"       
+# [17] "Eastern Asia"         
+# [18] "Polynesia"   
+cfr_data <- fread("data/cfr_data.csv")
+unique(cfr_data$Region)
+# [1] "Asia"     "Africa"   "Oceania" 
+# [4] "Americas" "Europe"   "Overall"
+unique(cfr_data$Sub_Region)
+# [1] "South-Eastern Asia"
+# [2] "Southern Asia"     
+# [3] "Eastern Africa"    
+# [4] "Western Africa"    
+# [5] "Southern Africa"   
+# [6] "Middle Africa"     
+# [7] "Overall"   
+# function to identify a value lookup table
+
+library(dplyr)
+library(janitor)
+
+cntry_region2 <- clean_names(cntry_region2)
+cfr_data <- clean_names(cfr_data)
+# cfr_data_cntry <- left_join(cntry_region2, cfr_data, by = "sub_region")
+
+cfr <- data.frame(age = rep(c("overall", "children", "adult mixed"), each = nrow(cntry_region2)),
+                  mean = rep(NA, 3 * nrow(cntry_region2)),
+                  lower = rep(NA, 3 * nrow(cntry_region2)),
+                  upper = rep(NA, 3 * nrow(cntry_region2)))
+
+d <- rbind(cntry_region2, cntry_region2)
+d <- rbind(d, cntry_region2)
+dd <- cbind(d, cfr)
+
+cfr_data$sub_region <- tolower(cfr_data$sub_region)
+cfr_data$region <- tolower(cfr_data$region)
+cfr_data$age <- tolower(cfr_data$age)
+dd$sub_region <- tolower(dd$sub_region)
+dd$region <- tolower(dd$region)
+dd$age <- tolower(dd$age)
+
+dd_ <- dd 
+# for(i in 241) {
+for(i in 1:nrow(dd)) {
+  srg <- dd[i, ]$sub_region
+  ag <- dd[i, ]$age
+  # message(paste0("i = ", i, ", ", srg, ", ", ag))
+  x <- which(cfr_data$sub_region == srg)
+  y <- which(cfr_data$age == ag)
+  z <- intersect(x, y)
+  # message(paste0("x = ", x, ", y = ", y, ", z = ", z))
+  message(paste0("z = ", z))
+  if(length(z) == 1){
+   dd[i, ]$mean <- cfr_data[z,]$mean
+   dd[i, ]$upper <- cfr_data[z,]$upper
+   dd[i, ]$lower <- cfr_data[z,]$lower
+  } 
+  else if(length(z) == 0 & length(x) == 1 & length(y) > 0){
+    if(length(x) == 1){
+      dd[i, ]$mean <- cfr_data[x,]$mean
+      dd[i, ]$upper <- cfr_data[x,]$upper
+      dd[i, ]$lower <- cfr_data[x,]$lower
+    } # message(paste0("x = ", x, ", y =", y ))
+  } 
+  else {
+    rg <- dd[i, ]$region
+    x1 <- which(cfr_data$region == rg)
+    x2 <- which(cfr_data$sub_region == "overall") # lower case
+    y <- which(cfr_data$age == "overall") # upper case
+    z <- intersect(intersect(x1, x2), y)
+    # message(paste0("z = ", z))
+    if(length(z) == 1){
+      dd[i, ]$mean <- cfr_data[z,]$mean
+      dd[i, ]$upper <- cfr_data[z,]$upper
+      dd[i, ]$lower <- cfr_data[z,]$lower
+    } 
+    else if(grepl("america", dd[i, ]$region)){
+      z <- which(cfr_data$region == "americas")
+      
+      if(length(z) == 1){
+        dd[i, ]$mean <- cfr_data[z,]$mean
+        dd[i, ]$upper <- cfr_data[z,]$upper
+        dd[i, ]$lower <- cfr_data[z,]$lower
+      }
+    }
+  }
+}
+  
+View(dd)
+View(cfr_data)
+
+## extract beta distribution
+dd$se <- rep(NA, nrow(dd))
+dd$beta_alpha <- rep(NA, nrow(dd))
+dd$beta_beta <- rep(NA, nrow(dd))
+
+for (i in 1:nrow(dd)) {
+  dd$se[i] <- (dd$upper[i] - dd$lower[i]) / (2 * qnorm(0.975))
+  betap <- est_beta_params(mu = dd$mean[i], var = dd$se[i]^2)
+  dd$beta_alpha[i] <- betap$alpha
+  dd$beta_beta[i] <- betap$beta
+}
+
+dd$xnbar <- rep(NA, nrow(dd))
+dd$diff <- rep(NA, nrow(dd))
+for (i in 1:nrow(dd)) {
+  r <- rbeta(1e6, dd$beta_alpha[i], dd$beta_beta[i])
+  dd$xnbar[i] <- mean(r)
+  dd$diff[i] <- dd$xnbar[i] - dd$mean[i]
+}
+
+## test set_params_tf snippet to include cfr
+
+cfr_data_ <- cfr_data
+cfr_data <- dd
+case_fatality_ratio_data <- dd
+usethis::use_data(case_fatality_ratio_data, overwrite = T)
+
+params$params$
+n <- 1000
+cfr_1 <- runif(n)
+cfr_2 <- runif(n)
+countries <- clean_country_names(countries)
+for (i in 1:length(countries)){
+  country <- countries[i]
+  cfr_cntry <- cfr_data[cfr_data$country == country, ]
+  cfr_1_cntry <- cfr_cntry[cfr_cntry$age == "children", ]
+  cfr_2_cntry <- cfr_cntry[cfr_cntry$age == "adult mixed", ]
+  cfr_1_tr <- qbeta(cfr_1, shape1 = cfr_1_cntry$beta_alpha,
+                      shape2 = cfr_1_cntry$beta_beta)
+  cfr_2_tr <- qbeta(cfr_2, shape1 = cfr_2_cntry$beta_alpha,
+                      shape2 = cfr_2_cntry$beta_beta)
+  df <- data.frame(
+    param = rep(c("cfr_1_tr","cfr_2_tr"), each = n),
+    val = c(cfr_1_tr, cfr_2_tr))
+  
+  ggplot(df) +
+    geom_histogram(aes(val)) + 
+    facet_wrap(~param) + 
+    labs(title = country)
+  
+  message(country)
+  message(cfr_1_cntry$mean)
+  message(paste0("mean1 = ", mean(cfr_1_tr)))
+  message(cfr_2_cntry$mean)
+  message(paste0("mean2 = ", mean(cfr_2_tr)))
+  invisible(readline(prompt = "Press RET to continue"))
+}
+  
+```
+
+
+### Transformation
+```{r}
+m <- 0.2
+v <- 0.04
+calc_se <- function(lower, upper){
+  se <- (upper - lower) / (2 * qnorm(0.975))
+  return (se)
+}
+
+x1 <- est_beta_params(mu = m, var = v)
+x2 <- calc_lognorm_params(mean = m, sd = sqrt(v))
+
+y1 <- rbeta(1e5, shape1 = x1$alpha, shape2 = x1$beta)
+summary(y1)
+
+y2 <- rlnorm(1e5, meanlog = x2$mu, sdlog = x2$sigma)
+summary(y2)
+
+```
+
+

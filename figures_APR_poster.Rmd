@@ -1,0 +1,163 @@
+---
+title: "Figures for the APR poster"
+author: "Jong-Hoon Kim"
+date: "9/8/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## target countries
+```{r setup, include=FALSE}
+library(rnaturalearth)
+library(sf)
+library(ggplot2); theme_set(theme_bw())
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+ggplot(data = world)+
+  geom_sf()
+library(choleratyphoidivi)
+d <- data.table::fread('coverage_201910gavi-5_typhoid-routine-default.csv')
+typhoid_target_countries <- clean_country_names(unique(d$country))
+d <- fread("central-burden-template.201910gavi-5.Cholera_IVI-Kim_standard_full-run.csv")
+cholera_target_countries <- clean_country_names(unique(d$country_name))
+
+world$admin <- clean_country_names(world$admin)
+world$cholera <- ifelse(world$admin %in% cholera_target_countries, TRUE, FALSE)
+world$typhoid <- ifelse(world$admin %in% typhoid_target_countries, TRUE, FALSE)
+
+ggplot(data = world)+
+  geom_sf(aes(fill = cholera))+
+  scale_fill_manual(name = "",
+                   values = c("grey90", "#1F618D"),
+                   guide = FALSE)
+ggsave("plots/cholera_included.png")
+ggplot(data = world)+
+  geom_sf(aes(fill = typhoid))+
+  scale_fill_manual(values = c("grey90", "#E74C3C"),
+                    guide = FALSE)
+ggsave("plots/typhoid_included.png")
+
+```
+
+## Sampling
+```{r}
+library(pomp)
+p <- sobol_design(lower=c(dw=0,cfr=0), upper=c(dw=1,cfr=1),nseq=100)
+
+library(raster)
+x <- raster(ncol=20, nrow=20, xmn=0, xmx=1, ymn=0, ymx=1)
+values(x) <- NA
+df <- data.frame(x=rep(0,100), y=seq(0,1,length.out=100))
+
+ggplot(df)+
+  geom_line(aes(x,y), linetype=NA)+
+  geom_vline(xintercept = seq(0,1,by=0.1), linetype = "dotted")+
+  geom_hline(yintercept = seq(0,1,by=0.1), linetype = "dotted")+
+  geom_point(data = p, aes(dw,cfr), color="#1F618D") +
+  
+  scale_x_continuous(breaks=seq(0,1,by=0.1), labels=seq(0,1,by=0.1),
+                     limits=c(0,1),expand = c(0, 0))+
+  scale_y_continuous(breaks=seq(0,1,by=0.1), labels=seq(0,1,by=0.1),
+                     limits=c(0,1),expand = c(0, 0))+
+  labs(x="case fatality ratio", y = "disability weight")+
+  expand_limits(x = 0, y = 0) +
+  theme(panel.grid.minor = element_blank())
+
+ggsave("plots/params_sobol_2D_example.png")  
+
+
+p$cfr_beta_tr <- qbeta(p$cfr, shape1 = 2, shape2 = 2)
+p$dw_normal_tr <- qbeta(p$dw, shape1 = 2, shape2 = 8)
+xx <- qbeta(seq(0,1,by=0.1), shape1 = 2, shape2 = 2)
+yy <- qbeta(seq(0,1,by=0.1), shape1 = 2, shape2 = 8)
+
+ggplot(df)+
+  geom_line(aes(x,y), linetype=NA)+
+  geom_vline(xintercept = seq(0,1,by=0.1), linetype = "dotted")+
+  geom_hline(yintercept = seq(0,1,by=0.1), linetype = "dotted")+
+  geom_point(data = p, aes(cfr_beta_tr, dw_normal_tr), color="#E74C3C")+ 
+  scale_x_continuous(breaks = seq(0,1,by=0.1), labels = seq(0,1,by=0.1),
+                     limits = c(0,1),expand = c(0, 0))+
+  scale_y_continuous(breaks = seq(0,1,by=0.1), labels = seq(0,1,by=0.1),
+                     limits = c(0,1),expand = c(0, 0))+
+  labs(x="case fatality ratio", y = "disability weight")+
+  theme(panel.grid.minor = element_blank())
+
+ggsave("plots/params_sobol_2D_example_transformed.png")  
+```
+
+## Simulation results
+```{r}
+vacc <- readRDS("outputs/stoch_output_Cholera_campaign_20210902.rds")
+novacc <- readRDS("outputs/stoch_output_Cholera_novacc_20210902.rds")
+
+cntries <- c("Ghana", "Pakistan")
+
+
+novacc %>% 
+  filter(country_name  == "Ghana") %>% 
+  select(c("run_id", "year", "age", "country_name", "cohort_size",
+ "cases", "deaths", "dalys")) %>%   
+  group_by(country_name, run_id, year) %>% 
+  summarize(across(everything(), sum)) -> novacc_gha
+
+vacc %>% 
+  filter(country_name  == "Ghana") %>% 
+  select(c("run_id", "year", "age", "country_name", "cohort_size",
+ "cases", "deaths", "dalys")) %>%   
+  group_by(country_name, run_id, year) %>% 
+  summarize(across(everything(), sum)) -> vacc_gha
+
+
+novacc_gha %>%
+  pivot_longer(cols = -c("country_name","run_id","year","age")) %>%
+  mutate(across(name, factor, levels=c("cohort_size","cases","deaths","dalys"),
+                labels=c("Cohort size", "Cases", "Deaths", "DALYs"))) %>%
+  filter(run_id == 1) %>% 
+  ggplot()+
+  geom_line(aes(x=year,y=value)) +
+  facet_wrap(~name, scales = "free_y") +
+  labs(x="Year", y="")
+
+ggsave("plots/ghana_4_facets.png")  
+
+
+novacc_gha %>% select(run_id, year, cases) -> x1
+vacc_gha %>% select(run_id, year, cases) -> x2
+
+xx <- cbind(x1,x2$cases) 
+names(xx) <- c(names(xx)[1:3], "cases_novacc", "cases_vacc")
+xx %>% 
+  pivot_longer(cols = c("cases_novacc", "cases_vacc")) %>%
+  mutate(across(name, factor, levels=c("cases_novacc","cases_vacc"),
+                labels=c("No vaccination", "Vaccination"))) %>%
+  ggplot()+
+  geom_line(aes(x=year,y=value, group=run_id)) +
+  facet_wrap(~name) +
+  labs(x="Year", y="Cases")
+
+ggsave("plots/ghana_30_runs.png")  
+
+ 
+
+library(tidyverse)
+# novacc_fitered <- setDT(novacc) %>% filter.(country_name %in% cntries)
+# vacc_fitered <- setDT(vacc) %>% filter.(country_name %in% cntries)
+
+novacc_fitered <- novacc %>% filter(country_name %in% cntries)
+
+novacc_fitered %>% 
+  select(c("run_id", "year", "age", "country_name", "cohort_size",
+ "cases", "deaths", "dalys")) %>%   
+  group_by(country_name, run_id, year) %>% 
+  summarize(across(everything(), sum)) -> novacc_s
+
+novacc_s %>%
+  filter(country_name == "Ghana") %>% 
+  ggplot()+
+  geom_line(aes(x=year,y=cases, group=run_id, color=country_name))
+
+
+```
+

@@ -13,6 +13,7 @@
 # Very simple diagnostic plots -- maybe helpful to detect in case there are major flaws
 year_val_plot <- function(disease=NULL,
                           country = NULL,
+                          vacc_scenario = NULL,
                           sim_central_value,
                           age){
   country_clean <- clean_country_names(country)
@@ -22,27 +23,35 @@ year_val_plot <- function(disease=NULL,
   dis <- disease
   rm(disease)
 
-  if(missing(age)){
+  if (missing(age)) {
     sim_central_value %>%
-      filter(disease == dis, country_name == country_clean) %>%
+      filter(tolower(disease) == tolower(dis), country_name == country_clean) %>%
       group_by(year) %>%
       summarize(cohort_size = sum(cohort_size),
                 cases = sum(cases),
                 deaths = sum(deaths),
                 dalys = sum(dalys)) %>%
-      pivot_longer(cols = cohort_size:dalys, names_to = "var", values_to = "val") %>%
-      ggplot(aes(year, val))+
+      pivot_longer(cols = cohort_size:dalys, names_to = "var", values_to = "val") -> df
+
+    age <- NA
+
+  } else {
+    sim_central_value %>%
+      filter(tolower(disease) == tolower(dis),
+             age == !!age, country_name == country_clean) %>%
+      pivot_longer(cols = cohort_size:dalys, names_to = "var", values_to = "val") -> df
+
+  }
+
+  plt <- ggplot(df, aes(year, val))+
       geom_line()+
-      facet_wrap(~var, scales = "free_y") +
-      ggtitle(paste0(dis, " in ", country_clean))
+      facet_wrap(~var, scales = "free_y")
+  if (is.na(age)) {
+    plt <- plt + ggtitle(paste0(dis, " in ", country_clean, " (", vacc_scenario, ")"))
   }
   else {
-    sim_central_value %>%
-      filter(disease == dis, age == !!age, country_name == country_clean) %>%
-      pivot_longer(cols = cohort_size:dalys, names_to = "var", values_to = "val") %>%
-      ggplot(aes(year, val))+
-      geom_line()+
-      facet_wrap(~var, scales = "free_y") +
-      ggtitle(paste0(dis, " in ", country_clean, " (age = ", age, ")"))
+    plt <- plt + ggtitle(paste0(dis, " in ", country_clean, " (", vacc_scenario, ")", " (age = ", age, ")"))
   }
+
+  return (plt)
 }

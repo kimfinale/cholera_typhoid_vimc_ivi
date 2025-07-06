@@ -1,0 +1,1076 @@
+---
+title: "Typhoid final runs"
+author: "Jong-Hoon Kim"
+date: "9/14/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Load the package
+```{r}
+devtools::load_all()
+```
+
+```{r}
+library(data.table)
+library(devtools)
+library(usethis)
+library(tidyverse)
+```
+
+## Checklist
+1. Download the data set and familiarize yourself with the system
+2. Check if the each function works for each data set provided
+  a. Country names may differ between different data sets
+  b. See if there are any missing values
+## Set-up
+```{r setup}
+# country names from the report template
+template <- 
+  fread("inst/extdata/central-burden-template.202110gavi-3.Typhoid_IVI-Kim_standard.csv")
+countries <- clean_country_names(unique(template$country_name))
+dis <- "typhoid"
+year_chr <- "2000:2100"
+```
+
+## Steps
+```{r, include=FALSE}
+cntry <- countries[13]
+
+for (cntry in countries) {
+  pop <- setup_cohorts(country = cntry, 
+                       year = eval(parse(text = year_chr)),
+                       population_data = population_data)
+}
+
+vacc_cov_data <- list()
+vacc_cov_data[[1]] <- vacc_cov_input_routine_tf
+vacc_cov_data[[2]] <- vacc_cov_input_campaign_tf
+vacc_cov_data[[3]] <- vacc_cov_input_routine_ia2030_tf
+vacc_cov_data[[4]] <- vacc_cov_input_campaign_ia2030_tf
+
+# i <- 1
+# vacc_cov_data[[i]] %>%
+#   filter(country_code == "CAF", year == 2024) -> vd
+  
+for (i in seq_along(vacc_cov_data)) {
+  for (cntry in countries) {
+    cat("vacc_cov_data_i =", i, ", country =", cntry, "\n")
+    vc <- create_vaccine_coverage(country = cntry,
+                            population = pop,
+                            vaccine_coverage_data = vacc_cov_data[[i]])
+    
+    vacc_protected_direct <- 
+      calculate_vaccine_protected(disease = dis,
+                                  country = cntry,
+                                  population = pop,
+                                  year = 2000:2100,
+                                  vaccine_coverage = vc,
+                                  vaccine_efficacy = 0.84,
+                                  vaccine_immunity_duration = 15,
+                                  exponential_decay = TRUE,
+                                  vaccine_efficacy_by_year = NULL)
+  
+  }
+}
+# population is now 
+pop_unprotected <- pop - vacc_protected_direct
+sum(pop_unprotected < 0)
+
+# ve <- c(0.816, 0.588,0.918)
+# cov <- 0.64*30685/155448
+# eff_cov <- ve*cov
+
+# indirect vaccine protection
+# first calculate 
+
+# vacc_recipients <- vc * pop
+# vaccine recipients decrease only by death and for convenience vaccine immunity 
+# duration is set to be very large 
+
+#----------------------------------
+# Added on 29 April 2022
+vacc_protected <- vacc_protected_direct
+#---------------------------------------
+
+eff_vacc_cov_year <- calc_vacc_cov_year(pop = pop, vacc_recipients = vacc_protected)
+
+vacc_recipients <- 
+      calculate_vaccine_protected(disease = dis,
+                                  country = cntry,
+                                  population = pop,
+                                  year = 2000:2100,
+                                  vaccine_coverage = vc,
+                                  vaccine_efficacy = 1.0,
+                                  vaccine_immunity_duration = 1000,
+                                  exponential_decay = TRUE,
+                                  vaccine_efficacy_by_year = NULL)
+pop_unvacc <- pop - vacc_recipients
+indirect_vacc_protected <- 
+  calc_indirect_vacc_protected(disease="Typhoid", country=cntry,
+                               population=pop_unvacc,
+                               vacc_cov=eff_vacc_cov_year,
+                               vacc_cov_limit = 0.05, indirect_vacc_efficacy = 0.2)
+
+pop_unprotected <- pop_unprotected - indirect_vacc_protected
+sum(pop_unprotected < 0)
+
+
+# Impact of vaccine waning
+vacc_cov_year <- calc_vacc_cov_year(pop = pop, vacc_recipients = vacc_recipients)
+eff_vacc_cov_year <- calc_vacc_cov_year(pop = pop, vacc_recipients = vacc_protected)
+
+plot(1:101, vacc_cov_year, type = "l", xlab = "Year since 2000",
+     main = "Vaccine recipients who lost immunity\ndue to waning and imperfect protection")
+lines(1:101, eff_vacc_cov_year, col = 2)                              
+
+
+# # sample an incidence rate
+# overall_ir_dat %>%
+#   filter(country == cntry) %>%
+#   select(min, max) %>% unlist() -> ir_val
+# 
+# set.seed(1)
+# overall_ir <- runif(1, min = ir_val[1], max = ir_val[2])
+
+overall_ir <- 150
+
+age_spec_ir_ref <- 
+  calc_age_spec_ir_ref_tf(country = cntry, 
+                         incid = incid_tf_ihme,
+                         ref_year = 2017)
+
+ir_adj <- calc_incid_rate_risk_adj(country = cntry,
+                        overall_ir = overall_ir,
+                        wash_risk_ratio = wash_risk_ratio,
+                        wash_prop = wash_prop, 
+                        ref_year = 2017,
+                        population = population_data,
+                        incid = incid_tf_ihme)
+
+# check if the incidence rates pass through the reference
+# age_specific incidence rate
+age_ir_ref <- overall_ir * age_spec_ir_ref$ir_dist
+plot(rep(17,101), age_ir_ref, xlim = c(1,101))
+
+for (i in 1:101) {
+  lines(1:101, ir_adj[i,], col=2)
+}
+
+cases <- calculate_cases_tf(country = cntry,
+                             population = pop_unprotected,
+                             year = 2000:2100,
+                             incidence_rate = ir_adj)
+
+pop[1:10,1]
+cases[1:10,1]
+head(pop)
+head(cases)
+
+pars_data <- parameters
+
+dis_sev <- extract_param_tf(params_data = pars_data, str = str_dis_severity)
+dis_dur <- extract_param_tf(params_data = pars_data, str = str_dis_duration)
+dis_wt <- extract_param_tf(params_data = pars_data, str = str_dis_disability)
+
+yld <- calculate_YLD_tf(cases = cases,
+                        disability_weight = dis_wt,
+                        prob_severity = dis_sev,
+                        illness_duration = dis_dur)
+yld[1:10,1:20]
+
+# ir_data$val[1:10]* sum(dis_sev * dis_wt * dis_dur)
+# yld_data$val[1:10]
+
+
+# This needs to be wrapped in a function
+# Case fatality ratio by age
+# Data extracted from the global average (Stanaway et al. 2019 -- GBD 2017)
+ir_age <- fread("inst/extdata/ir_age_typhoid.csv")
+mort_age <- fread("inst/extdata/mort_age_typhoid.csv")
+
+ir_lower <- ir_age %>% filter(name == "lower")
+ir_upper <- ir_age %>% filter(name == "upper")
+
+nrow(ir_lower) == nrow(ir_upper)
+nruns <- 200
+ir_sample <- data.frame(matrix(NA, nrow(ir_lower), ncol = nruns))
+for (i in 1:200) {
+  ir_sample[,i] <- runif(nrow(ir_lower), min = ir_lower$value, max = ir_upper$value)
+}
+
+mort_lower <- mort_age %>% filter(name == "lower")
+mort_upper <- mort_age %>% filter(name == "upper")
+
+nrow(mort_lower) == nrow(mort_upper)
+nruns <- 200
+mort_sample <- data.frame(matrix(NA, nrow(mort_lower), ncol = nruns))
+for (i in 1:200) {
+  mort_sample[,i] <- runif(nrow(mort_lower), min = mort_lower$value, max = mort_upper$value)
+}
+
+cfr_sample <- mort_sample / ir_sample
+apply(cfr_sample, 1, summary)  
+apply(cfr_sample, 1, mean) 
+
+cfr <- calc_cfr(country == cntry)
+
+yll <- calculate_YLL_tf(cases = cases,
+                        country = cntry,
+                        case_fatality = cfr)
+
+
+yll[1:10,"2015"]
+cases[1:10, "2015"] * cfr[1:10] * life_expectancy[1:10, "2015"] # 0-9 y0
+
+ir[1:10] * cfr[1:10] * life_expectancy[1:10, "2015"] # 0 -9 y0
+yll_data[yll_data$age == "1 to 4",]$val
+yll_data[yll_data$age == "5 to 9",]$val
+yll_data[yll_data$age == "<1 year",]$val
+# it appears that life expectancy is lower for us compared to the IHME
+
+daly <- calculate_DALY_tf(country = cntry,
+                          cases = cases,
+                          disability_weight = dis_wt,
+                          prob_severity = dis_sev,
+                          illness_duration = dis_dur, 
+                          case_fatality = cfr)
+daly[1:10, 1:10]
+yll[1:10, 1:10] + yld[1:10, 1:10]
+```
+
+
+
+## Sampling parameters
+```{r}
+# Sampling based on Sobol low discrepancy sequence   
+countries
+nruns <- 5
+parameter_data <- parameters
+life_expectancy_data <- life_expectancy
+vacc_cov_data <- vacc_cov_input_routine_tf
+countries
+cntry <- countries[1]
+yr <- 2000:2100
+dis <- "Typhoid"
+params_list <- 
+  set_params_tf(disease = dis,
+                nruns = nruns,
+                country = cntry,
+                parameter_data = parameter_data,
+                incidence_rate_data = overall_incid_rate)
+
+# get country-level fixed parameters
+life_exp <- 
+  get_life_expectancy(life_expectancy_data = life_expectancy_data, country = cntry, year = yr)
+
+vi <- vaccine_impact_tf(disease = dis,
+                  country = cntry,
+                  population_data = population_data,
+                  vaccine_coverage_data = vacc_cov_data,
+                  vacc_scenario = "routine",
+                  year = yr,
+                  life_expectancy = life_exp,
+                  case_fatality_ratio = params_list$case_fatality_ratio[,1],
+                  parameter_sample = params_list$params[1,]) 
+
+```
+
+# Comparison of vaccination programs
+```{r}
+library(data.table)
+routine_tf_gavi2  <- fread("inst/extdata/coverage_202110gavi-2_typhoid-routine-default.csv")
+routine_tf_gavi3  <- fread("inst/extdata/coverage_202110gavi-3_typhoid-routine-default.csv")
+campaign_tf_gavi2 <- fread("inst/extdata/coverage_202110gavi-2_typhoid-campaign-default.csv")
+campaign_ia2030_tf_gavi3 <- fread("inst/extdata/coverage_202110gavi-3_typhoid-campaign-ia2030_target.csv")
+routine_ia2030_tf_old <- fread("inst/extdata/coverage_202110gavi-2_typhoid-routine-ia2030_target.csv")
+
+
+routine_tf_gavi2 %>% filter(country == "Pakistan", year == 2021)
+routine_tf_gavi3 %>% filter(country == "Pakistan", year == 2021)
+
+campaign_ia2030_tf_gavi2 %>% filter(country == "Pakistan", year == 2021)
+campaign_ia2030_tf_gavi3 %>% filter(country == "Pakistan", year == 2021)
+
+vacc_cov_input_campaign_tf %>% filter(country == "Pakistan", year == 2021)
+
+vacc_cov_input_campaign_ia2030_tf %>% filter(country == "Afghanistan") -> c2
+
+```
+
+```{r}
+countries <- clean_country_names(unique(template$country_name))
+
+yr <- 2000:2100
+vacc_cov_input <- list()
+vacc_cov_input[[1]] <- vacc_cov_input_routine_tf
+vacc_cov_input[[2]] <- vacc_cov_input_routine_ia2030_tf
+vacc_cov_input[[3]] <- vacc_cov_input_campaign_tf
+vacc_cov_input[[4]] <- vacc_cov_input_campaign_ia2030_tf
+
+# for(r in 1:length(countries)){
+for(r in 60:60){
+  cntry <- countries[r]
+  message(paste0("country = ", cntry))
+  
+  pop <- setup_cohorts(country = cntry,
+                       year = yr,
+                       population_data = population_data)
+  for(i in 4:4) {
+    vacc_cov <- create_vaccine_coverage(country = cntry,
+                                population = pop,
+                                vaccine_coverage_data = vacc_cov_input[[i]])
+  }
+}
+  
+  # invisible(readline(prompt = "Press RET to continue"))
+
+```
+
+## Parameter transformation test
+```{r}
+# incidence rate
+incidence_rate_data %>% filter(country == cntry) %>%
+  pull(max) -> ir_ub
+incidence_rate_data %>% filter(country == cntry) %>%
+  pull(min) -> ir_lb
+
+# duration of illness in years
+disdur_lb <- extract_param_tf(parameter_data, str_dis_duration, "lower")
+disdur_ub <- extract_param_tf(parameter_data, str_dis_duration, "upper")
+disdur_center <- extract_param_tf(parameter_data, str_dis_duration, "val")
+# disability weight
+diswt_lb <- extract_param_tf(parameter_data, str_dis_disability, "lower")
+diswt_ub <- extract_param_tf(parameter_data, str_dis_disability, "upper")
+diswt_center <- extract_param_tf(parameter_data, str_dis_disability, "val")
+# no uncertainty range are are available for prob of disease severity
+disseverity_val <- extract_param_tf(parameter_data, str_dis_severity, "val")
+
+str <- "duration of vaccine-induced immunity (year)"
+vaccdur_lb <- extract_param_tf(parameter_data, str, "lower")
+vaccdur_ub <- extract_param_tf(parameter_data, str, "upper")
+vaccdur_center <- extract_param_tf(parameter_data, str, "val")
+
+vacceff_lb <- extract_param_tf(parameter_data, "vaccine efficacy", "lower")
+vacceff_ub <- extract_param_tf(parameter_data, "vaccine efficacy", "upper")
+vacceff_center <- extract_param_tf(parameter_data, "vaccine efficacy", "val")
+
+  
+set.seed(42)
+cntry <- countries[[1]]
+# uniform random parameters are transformed within the function
+params <- 
+  set_params_tf(disease = "Typhoid",
+                nruns = 2000,
+                country = cntry,
+                parameter_data = parameter_data,
+                incidence_rate_data = overall_incid_rate_tf)
+i=4  
+for (i in 1:4){
+  plot(density(eval(parse(text=paste0("params$params$disability_weight_",i)))))
+  abline(v=c(diswt_lb[i], diswt_ub[i]), col=c(2,2))
+  
+  plot(density(eval(parse(text=paste0("params$params$illness_duration_",i)))))
+  abline(v=c(disdur_lb[i], disdur_ub[i]), col=c(2,2))
+}
+
+plot(density(eval(parse(text=paste0("params$params$vacc_efficacy")))))
+abline(v=c(vacceff_lb, vacceff_ub), col=c(2,2))
+
+plot(density(eval(parse(text=paste0("params$params$duration_vacc_protection")))))
+abline(v=c(vaccdur_lb, vaccdur_ub), col=c(2,2))
+
+plot(density(eval(parse(text=paste0("params$params$incidence_rate")))))
+abline(v=c(ir_lb, ir_ub), col=c(2,2))
+
+```
+
+## Vaccine coverage over time
+```{r}
+template <- 
+  fread("inst/extdata/central-burden-template.202110gavi-3.Typhoid_IVI-Kim_standard.csv")
+countries <- unique(template$country_name)
+dis <- "Typhoid"
+year_chr <- "2000:2100"
+cntry <- countries[1]
+
+for (cntry in countries) {
+  pop <- setup_cohorts(country = cntry, 
+                       year = eval(parse(text = year_chr)),
+                       population_data = population_data)
+}
+
+vacc_cov_data <- list()
+vacc_cov_data[[1]] <- vacc_cov_input_routine_tf
+vacc_cov_data[[2]] <- vacc_cov_input_campaign_tf
+vacc_cov_data[[3]] <- vacc_cov_input_routine_ia2030_tf
+vacc_cov_data[[4]] <- vacc_cov_input_campaign_ia2030_tf
+i=1
+for (i in seq_along(vacc_cov_data)) {
+  for (cntry in countries) {
+    cat("vacc_cov_data_i =", i, ", country =", cntry, "\n")
+    vc <- create_vaccine_coverage(country = cntry,
+                            population = pop,
+                            vaccine_coverage_data = vacc_cov_data[[i]])
+    
+    vacc_protected <- 
+      calculate_vaccine_protected(disease = dis,
+                                  country = cntry,
+                                  population = pop,
+                                  year = 2000:2100,
+                                  vaccine_coverage = vc,
+                                  vaccine_efficacy = 0.81,
+                                  vaccine_immunity_duration = 15,
+                                  exponential_decay = TRUE,
+                                  vaccine_efficacy_by_year = NULL)
+  
+  }
+}
+## population is now 
+pop_unvacc <- pop - vacc_protected
+sum(pop_unvacc < 0)
+
+pop_yr <- apply(pop, 2, sum)
+vacc_protected_yr <- apply(vacc_protected, 2, sum)
+
+# calc_vacc_cov_year <- function(pop, vacc_procted){
+#   pop_yr <- apply(pop, 2, sum)
+#   vacc_protected_yr <- apply(vacc_protected, 2, sum)
+#   # prop_vacc_yr <- vacc_protected_yr / pop_yr
+#   return(vacc_protected_yr / pop_yr)
+# }
+
+vacc_cov_year <- calc_vacc_cov_year(pop, vacc_procted)
+
+prop_vacc_yr <- vacc_protected_yr / pop_yr
+pop_yr_u15 <- apply(pop[1:15,], 2, sum)
+vp_yr_u15 <- apply(vacc_protected[1:15,], 2, sum)
+prop_vacc_yr_u15 <- vp_yr_u15 / pop_yr_u15
+
+plot(2000:2100, prop_vacc_yr, type="l", ylim=c(0,1))
+lines(2000:2100, prop_vacc_yr_u15, type="l", col=2)
+
+
+# Bangladesh cluster-randomzied trial
+#an average vaccine coverage of children aged 9 months to less than 16 years
+#of 64% during the follow-up period, Qadri et al. (2021) Lancet
+cov_overall <- 0.64*30685/155448
+ive <- 0.19
+prop_vacc_yr
+# Overall vaccine coverage was around 0.1263342*100 and the indirect VE was
+# 19% (-12, 41)
+# We made a simple  
+# This is a somewhat arbitrary decision and we explore 10% coverage and we explore various levels of vaccine coverage
+
+vacc_cov_year <- calc_vacc_cov_year(pop, vacc_procted)
+indirect_vacc_protected <- 
+  calc_indirect_vacc_protected(disease="Typhoid", country=cntry,
+                               population=pop_unvacc,
+                               vacc_cov=vacc_cov_year,
+                               vacc_cov_limit = 0.1, indirect_vacc_efficacy = 0.2)
+
+for(i in 1:101) {
+  plot(1:101, vacc_cov_year, type="l",
+       xlab="Year since 2000", main=paste0("Age = ", i-1, ", VC, IVP/UV"))
+  abline(h=0.1, col=2)
+  lines(1:101, indirect_vacc_protected[i,]/pop_unvacc[i,], col=3, type="l")
+  readline(prompt = "Press RET to continue")
+}
+# by year
+for(i in 1:nrow(vacc_protected)){
+  cat("i=", i, "\n")
+  plot(1:101, pop[i,], type="l", ylim=c(0,max(pop)), 
+       main=paste0("Age = ", i-1, ", Pop, VP, IVP"))
+  lines(1:101, vacc_protected[i,], col=2)
+  lines(1:101, indirect_vacc_protected[i,], col=3)
+  readline(prompt = "Press RET to continue")
+}
+
+for(i in 1:nrow(vacc_protected)){
+  cat("i=", i, "\n")
+  plot(1:101, vacc_protected[i,]/pop[i,], type="l", ylim=c(0, max(vacc_protected/pop)), main=paste0("Age = ", i-1, ", VP/Pop, IVP/Pop"))
+  lines(1:101, indirect_vacc_protected[i,]/pop[i,], col=2)
+  readline(prompt = "Press RET to continue")
+}
+
+i=29
+# by age
+for(i in 1:ncol(vacc_protected)){
+  cat("i=", i, "\n")
+  plot(1:101, vacc_protected[,i], ylim=c(0, max(pop[,i])), type="l", main="By year")
+  lines(1:101, indirect_vacc_protected[,i], col=2, type="l")
+  readline(prompt = "Press RET to continue")
+}
+
+```
+
+## Simulation
+Some methods require disease and other don't. How do I streamline it?
+```{r}
+# Restart R (Ctrl + Shift + F10) to remove any remaining objects 
+#
+devtools::load_all()
+set.seed(42)
+nruns <- 30
+#VIMC report requires capital T in Typhoid
+dis <- "Typhoid"
+year <- "2000:2100"
+vaccination_scenarios <- c("novacc", "routine", "routine", "campaign", "campaign")
+vaccination_scenarios_save <- c("novacc", "routine_1", "routine_2", "campaign_1", "campaign_2")
+
+tstamp <- format(Sys.time(), "%Y%m%dT%H%M")
+# target countries
+template <- 
+  fread("inst/extdata/central-burden-template.202110gavi-3.Typhoid_IVI-Kim_standard.csv")
+countries <- clean_country_names(unique(template$country_name))
+# parameters to explore
+# library(magrittr)
+parameter_data <- parameters %>% filter(tolower(disease) == tolower(dis))
+
+# # Sampling based on Sobol low discrepancy sequence
+# params_list <- list()
+# for (k in 1:length(countries)) {
+#   cntry <- countries[[k]]
+#   params_list[[k]] <-
+#     set_params_tf(disease = dis,
+#                   nruns = nruns,
+#                   country = cntry,
+#                   parameter_data = parameter_data,
+#                   incidence_rate_data = overall_incid_rate_tf)
+# }
+# 
+# saveRDS(params_list, paste0("outputs/params_", dis, "_", tstamp, ".rds"))
+
+# params_list <- readRDS("outputs/params_Typhoid_20211217T1101.rds")
+params_list <- readRDS("outputs/params_Typhoid_20220509T2324.rds")
+stoch_output <- list()
+stoch_parameters <- list()
+central_output <- list()
+
+# four vaccine coverage inputs
+# vacc_cov_input_routine_tf
+# vacc_cov_input_campaign_ia2030_tf
+# vacc_cov_input_campaign_tf
+# vacc_cov_input_routine_ia2030_tf
+
+vacc_cov_input <- list()
+vacc_cov_input[[1]] <- vacc_cov_input_routine_tf
+vacc_cov_input[[2]] <- vacc_cov_input_routine_ia2030_tf
+vacc_cov_input[[3]] <- vacc_cov_input_campaign_tf
+vacc_cov_input[[4]] <- vacc_cov_input_campaign_ia2030_tf
+
+## arrange vacc_scenarios according to the vaccination scenarios
+
+vacc_cov_data <- vacc_cov_input[[1]]
+
+# for (r in seq_along(vaccination_scenarios)) {
+for (r in 1:1) {
+  vacc_scenario <- vaccination_scenarios[r]
+  vacc_scenario_save <- vaccination_scenarios_save[r]
+  if (r > 1) {
+    vacc_cov_data <- vacc_cov_input[[r - 1]]
+  }
+  for (k in seq_along(countries)) {
+    cntry <- countries[k]
+    cohort <- list()
+    cases <- list()
+    deaths <- list()
+    dalys <- list() 
+
+    life_exp <- 
+      get_life_expectancy(life_expectancy_data = life_expectancy,
+                          country = cntry,
+                          year = eval(parse(text = year)))
+    
+    message(paste0("vaccine scenario = ", vacc_scenario, ", country = ", cntry))
+    ## country-specific parameters
+    params <- params_list[[k]] # country by index
+    
+    for (i in 1:nruns) {
+      # message(paste0("r = ", r, ", k = ", k, ", i = ", i))
+      param_sample <- list()
+      param_sample$vacc_efficacy <- params$params$vacc_efficacy[i]
+      param_sample$duration_vacc_protection <- 
+        params$params$duration_vacc_protection[i]
+      param_sample$indirect_vacc_efficacy <-
+        params$params$indirect_vacc_efficacy[i]
+      param_sample$eff_vacc_cov_limit <- 
+        params$params$eff_vacc_cov_limit[i]
+      
+      param_sample$illness_duration <- 
+        c(params$params$illness_duration_1[i],
+          params$params$illness_duration_2[i],
+          params$params$illness_duration_3[i],
+          params$params$illness_duration_4[i])
+
+      param_sample$prob_severity <- 
+        c(params$params$prob_severity_1[i],
+          params$params$prob_severity_2[i],
+          params$params$prob_severity_3[i],
+          params$params$prob_severity_4[i])
+
+      param_sample$disability_weight <- 
+        c(params$params$disability_weight_1[i],
+          params$params$disability_weight_2[i],
+          params$params$disability_weight_3[i],
+          params$params$disability_weight_4[i])     
+
+      param_sample$incidence_rate <- params$params$incidence_rate[i]
+      param_sample$case_fatality_ratio <- rep(c(params$params$case_fatality_ratio_1[i], params$params$case_fatality_ratio_2[i]), c(15, 86))
+      
+      res <- vaccine_impact_tf(disease = dis,
+                               country = cntry,
+                               population_data = population_data,
+                               vaccine_coverage_data = vacc_cov_data,
+                               vacc_scenario = vacc_scenario,
+                               year = eval(parse(text = year)),
+                               life_expectancy = life_exp,
+                               parameter_sample = param_sample) 
+                        
+      cohort[[i]] <- res$cohort_size
+      cases[[i]] <- res$cases
+      deaths[[i]] <- res$deaths
+      dalys[[i]] <- res$dalys 
+    }
+    
+    stoch <- list()
+    stoch$var <- c("cohort_size", "cases", "deaths", "dalys")
+    stoch$val[[1]] <- cohort[[1]] # cohort size remains constant across nruns
+    stoch$val[[2]] <- cases
+    stoch$val[[3]] <- deaths
+    stoch$val[[4]] <- dalys
+    
+    stoch_output[[k]] <- 
+      vimc_stoch_report(disease = dis, country = cntry, sim_output = stoch)
+    
+    # stoch_parameters[[k]] <- stoch_param
+    
+    names(stoch$val) <- stoch$var
+    central_output[[k]] <- vimc_central_report(disease = dis, country = cntry, 
+                               sim_output = stoch$val)
+  }
+  saveRDS(stoch_output, paste0("outputs/stoch_output_list_", tstamp, "_", dis, "_", vacc_scenario_save, ".rds"))
+   saveRDS(central_output, paste0("outputs/central_output_list_", tstamp, "_", dis, "_", vacc_scenario_save, ".rds"))
+}
+```
+
+## Simulation using simulate_tf
+### Create parameters list
+```{r}
+params_list <- list()
+nruns <- 200
+dis <- "Typhoid"
+tstamp <- format(Sys.time(), "%Y%m%dT%H%M")
+for (k in seq_along(target_countries_tf)) {
+  cntry <- target_countries_tf[[k]]
+  params_list[[k]] <-
+    set_params_tf(disease = dis,
+                  nruns = nruns,
+                  country = cntry,
+                  parameter_data = parameter_data_tf,
+                  incidence_rate_data = overall_incid_rate_tf)
+}
+#
+# Added on May 14 2022 
+names(params_list) <- dput(target_countries_tf)
+
+saveRDS(params_list, paste0("outputs/params_", dis, "_", tstamp, ".rds"))
+
+```
+
+### simulate_tf
+```{r}
+devtools::load_all()
+params_list <- readRDS("outputs/params_Typhoid_20220509T2333.rds")
+
+tstamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+
+vacc_scenario_id <- 5
+vacc_scenario <- vacc_scenarios_tf[vacc_scenario_id]
+vacc_cov_data_id <- 1
+if (vacc_scenario_id > 2){
+  vacc_cov_data_id = vacc_scenario_id - 1
+}
+
+dis <- "Typhoid"
+
+tic <- Sys.time()
+sim <- simulate_tf(disease = dis, 
+                   year = "2000:2100",
+                   country = target_countries_tf,
+                   params_list = params_list,
+                   vacc_scenario = vacc_scenario,
+                   vacc_cov_data = vacc_cov_input_tf[[vacc_cov_data_id]],
+                   nruns = 200)
+
+telapsed <- Sys.time() - tic
+cat("time elapsed = ", telapsed, "\n")
+
+saveRDS(sim$stoch, paste0("outputs/stoch_output_list_", tstamp, "_", dis, "_", vacc_scenario, ".rds"))
+saveRDS(sim$central, paste0("outputs/central_output_list_", tstamp, "_", dis, "_", vacc_scenario, ".rds"))
+
+```
+
+### simulate_tf2
+To create a method that works better for 
+```{r}
+devtools::load_all()
+params_list <- readRDS("outputs/params_Typhoid_20220509T2333.rds")
+
+# tstamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+tstamp <- format(Sys.time(), "%Y%m%d")
+vacc_scenario_id <- 3
+vacc_scenario <- vacc_scenarios_tf[vacc_scenario_id]
+vacc_cov_data_id <- 1
+if (vacc_scenario_id > 2){
+  vacc_cov_data_id = vacc_scenario_id - 1
+}
+
+cid <- 30
+tg_cntries_tf <- target_countries_tf[29:cid]   
+# tg_cntries_tf <- target_countries_tf[(cid-9):cid]
+
+# tg_cntries_tf <- target_countries_tf[11]
+
+dis <- "Typhoid"
+
+tic <- Sys.time()
+sim <- simulate_tf(disease = dis, 
+                   year = "2000:2100",
+                   country = tg_cntries_tf,
+                   params_list = params_list,
+                   vacc_scenario = vacc_scenario,
+                   vacc_cov_data = vacc_cov_input_tf[[vacc_cov_data_id]],
+                   nruns = 200)
+
+telapsed <- Sys.time() - tic
+cat("time elapsed = ", telapsed, "\n")
+
+saveRDS(sim$stoch, paste0("outputs/stoch_output_list_", tstamp, "_", dis, "_", vacc_scenario, "_cid_", cid, ".rds"))
+saveRDS(sim$central, paste0("outputs/central_output_list_", tstamp, "_", dis, "_", vacc_scenario, "_cid_", cid, ".rds"))
+
+```
+
+Compare w/ and w/o indirect effects
+```{r}
+sim1 <- readRDS("outputs/central_Typhoid_routine_1_20211125.rds")
+sim2 <- readRDS("outputs/central_Typhoid_routine_1_20211217T1117.rds")
+
+# cntry = target_countries_tf[1]
+dis = "Typhoid"
+
+library(ggplot2)
+library(gridExtra)
+for (cntry in target_countries_tf){
+  plt1 <- year_val_plot(disease = dis, country = cntry, 
+                        sim_central_value = sim1)
+  plt2 <- year_val_plot(disease = dis, country = cntry, 
+                        sim_central_value = sim2)
+  grid.arrange(plt1, plt2, nrow=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+```
+
+
+## Combine results in the list formate to data.frame files
+Results across countries given vaccination scenario (i.e., novacc, campaign, or
+routine) are in a list type. The do.call(rbind, x) is applied to make them a 
+single data.frame   
+
+### Manual conversion
+```{r}
+# data in which results from each country is stored in a list
+tstamp <- "20220510T103357"
+stocen <- "central" # "stoch" #   # stoch vs central
+vacc <- "routine_1"  #"novacc" #  "campaign_2" # "campaign_1" # "routine_2"
+dis <- "Typhoid"
+res_list <- readRDS(paste0("outputs/", stocen, "_output_list_", tstamp, "_Typhoid_", vacc, ".rds"))
+
+# bind each element of the list by row
+res <- do.call(rbind, res_list)
+
+# vacc <- c("novacc")
+# tstamp <- "20211217T1711"
+saveRDS(res, paste0("outputs/", stocen, "_", dis, "_", vacc, "_", tstamp, ".rds"))
+
+fwrite(res, paste0("outputs/", stocen, "_", dis, "_", vacc, "_", tstamp, ".csv"))
+```
+
+### Manual conversion2
+
+```{r}
+# data in which results from each country is stored in a list
+devtools::load_all()
+
+tstamp <- "20220514"
+vacc <- "routine_2"
+dis <- "Typhoid"
+stocen <- "stoch" 
+fls <- list.files("outputs", pattern = paste0(".*", stocen, ".*output.*list.*", tstamp, ".*", dis, ".*", vacc, ".*cid.*.*rds$"), full.names = T)
+# fls <- fls[c(1:4, 10:11, 5:9)]
+# res_list <- readRDS(fls[1])
+# bind each element of the list by row
+
+res <- lapply(fls, function(x) do.call(rbind, readRDS(x)))
+res <- do.call(rbind, res)
+
+# stocen <- "stoch"
+# res <- readRDS(paste0("outputs/", stocen, "_", dis, "_", vacc, "_", tstamp, ".rds"))
+
+saveRDS(res, paste0("outputs/", stocen, "_", dis, "_", vacc, "_", tstamp, ".rds"))
+
+fwrite(res, paste0("outputs/", stocen, "_", dis, "_", vacc, "_", tstamp, ".csv"))
+  
+```
+
+### Auto-conversion of multiple files
+```{r}
+disease <- c("Typhoid")
+vacc_scenario <- c("campaign_2")
+tstamp <- "20211217T1"
+library(data.table)
+for(dis in disease) {
+  for (vacc in vacc_scenario) {
+    central <- list.files("outputs", pattern = paste0("central.*list.*", tstamp, ".*", dis, ".*", vacc, ".*rds$"), full.names = T)
+    ## bind by row from a list of data with the same format
+    res <- do.call(rbind, readRDS(central))
+    saveRDS(res, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".rds"))
+    fwrite(res, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".csv"))
+    
+    stoch <- list.files("outputs", pattern = paste0("stoch.*output.*list.*", tstamp, ".*", dis, ".*", vacc, ".*rds$"), full.names = T)
+    res_stoch <- do.call(rbind, readRDS(stoch))
+    saveRDS(res_stoch, paste0("outputs/stoch_", dis, "_", vacc, "_", tstamp, ".rds"))
+    fwrite(res_stoch, paste0("outputs/stoch_", dis, "_", vacc, "_", tstamp, ".csv"))
+    }
+}
+```
+# 
+
+## Diagnostic plots
+```{r}
+library(ggplot2)
+# tstamp <- "20211217T1711"
+# tstamp <- "20211217T1"
+tstamp <- "20220511"
+# cntry <- "Central African Republic"
+# cntry <- "Angola" 
+for (cntry in target_countries_tf) {
+  dis <- "Typhoid"
+  vacc <- "routine_2"
+  # vacc <- "campaign_2"
+  # vacc <- "novacc" 
+  # cntry <- "Iran, Islamic Republic of"
+  res <- readRDS(paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".rds"))
+  plt <- year_val_plot(disease = dis, country = cntry, sim_central_value = res)
+  # year_val_plot(disease = dis, country = cntry, sim_central_value = res, age = 10)
+  print(plt)
+  invisible(readline(prompt = "Press RET to continue"))
+} 
+```
+
+## Diagnostics
+```{r}
+dis <- "Typhoid"
+Dropbox <- "C:\\Users\\jonghoon.kim\\Dropbox\\VIMC\\submitted_12May2022\\"
+
+vacc <- "novacc"
+tstamp <- "20220509"
+nv <- readRDS(paste0(Dropbox, "central_", dis, "_", vacc, "_", tstamp, ".rds"))
+
+tstamp <- "20220510"
+vacc <- "routine_1"
+r1 <- readRDS(paste0(Dropbox, "central_", dis, "_", vacc, "_", tstamp, ".rds"))
+vacc <- "campaign_1"
+c1 <- readRDS(paste0(Dropbox, "central_", dis, "_", vacc, "_", tstamp, ".rds"))
+vacc <- "campaign_2"
+c2 <- readRDS(paste0(Dropbox, "central_", dis, "_", vacc, "_", tstamp, ".rds"))
+
+vacc <- "routine_2"
+tstamp <- "20220514"
+r2 <- readRDS(paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".rds"))
+
+datfull <- list()
+datfull[[1]] <- nv
+datfull[[2]] <- r1
+datfull[[3]] <- r2
+datfull[[4]] <- c1
+datfull[[5]] <- c2
+
+datsub <- list()
+
+cntries <- unique(r1$country_name)
+for(cn in cntries){
+  cat(paste0("country = ", cn))
+  ca_nv <- round(sum(nv[nv$country_name == cn,]$cases))
+  ca_r1 <- round(sum(r1[r1$country_name == cn,]$cases))
+  ca_r2 <- round(sum(r2[r2$country_name == cn,]$cases))
+  ca_c1 <- round(sum(c1[c1$country_name == cn,]$cases))
+  ca_c2 <- round(sum(c2[c2$country_name == cn,]$cases))
+  cat(paste0(": ", ca_nv, ", ", ca_r1, ", ", ca_r2, ", ", ca_c1, ", ", ca_c2, "\n"))
+  cat(paste0("Diff: ", ca_nv - ca_r1, ", ", ca_nv - ca_r2, ", ", ca_nv - ca_c1, ", ", ca_nv - ca_c2, "\n"))
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+# plot against time
+vacc_scen <- c("novacc", "rountine_1", "rountine_2", "campaign_1", "campaign_2")
+
+library(ggplot2)
+
+for(cn in cntries) {
+  datsub <- list()
+  for(i in 1:length(datfull)) {
+    datfull[[i]] %>%
+      filter(country_name == cn) %>%
+      group_by(year) %>%
+      summarize(cohort_size = sum(cohort_size),
+                cases = sum(cases),
+                deaths = sum(deaths),
+                dalys = sum(dalys),
+                vacc_scenario = vacc_scen[i]) -> dtemp
+    
+      dtemp$vacc_scenario = vacc_scen[i] 
+      datsub[[i]] <- dtemp
+  }
+  df <- do.call(rbind, datsub)
+  plt <- ggplot(df)+
+    geom_line(aes(year, cases, color = vacc_scenario))+
+    scale_colour_manual(values = c("darkred", "red", "black", "blue", "steelblue"))+
+    ggtitle(paste0(cn))
+  
+  print(plt)
+  
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+```
+
+
+## Diagnostic plots II
+Visualize cohort size, cases, deaths, and dalys across vaccination scenarios for each of the countries over the period of 2000 - 2100
+```{r}
+library(ggplot2)
+library(grid)
+library(gridExtra)
+dis <- "Typhoid"
+tstamp <- "20211217T1"
+for (cntry in target_countries_tf){
+  res1 <- readRDS(paste0("outputs/central_",  dis, "_", "novacc_", tstamp, ".rds"))
+  res2 <- readRDS(paste0("outputs/central_",  dis, "_", "routine_1_", tstamp, ".rds"))
+  
+  p1 <- year_val_plot(disease = dis, country = cntry, sim_central_value = res1, vacc_scenario = "novacc")
+  p2 <- year_val_plot(disease = dis, country = cntry, sim_central_value = res2, vacc_scenario = "routine")
+
+  plt <- grid.arrange(p1, p2, ncol = 1)
+  print(plt)
+  invisible(readline(prompt = "Press RET to continue"))
+} 
+```
+
+## Diagnostic III
+1. Check if there are population categories (defined by chronological year and age) have negative numbers
+2. Check if cohort sizes are same across vaccination scenarios 
+3. Check if cases, deaths, and dalys are larger for non-vaccination scenarios compared to vaccination scenarios
+3. Check if cases, deaths, and dalys are larger for routine (or campaign) scenario compared to the 
+```{r}
+dis <- "typhoid"
+tstamp <- "20210930"
+for (cntry in target_countries){
+  res1 <- readRDS(paste0("outputs/central_",  dis, "_", "novacc_", tstamp, ".rds"))
+  res2 <- readRDS(paste0("outputs/central_",  dis, "_", "routine_", tstamp, ".rds"))
+  
+  if (sum(res1$cohort_size != res2$cohort_size) != 0) {
+    cat("Cohort size of novacc and routine scenrios are different for", cntry, "\n")
+  }
+  if (sum(res1$cases < res2$cases) != 0) {
+    cat("Cases are bigger for routine scenario than novacc scenrios for", cntry, "\n")    
+  }
+   if (sum(res1$deaths < res2$deaths) != 0) {
+    cat("Deaths are bigger for routine scenario than novacc scenrios for", cntry, "\n")    
+  }
+  if (sum(res1$dalys < res2$dalys) != 0) {
+    cat("DALYs are bigger for routine scenario than novacc scenrios for", cntry, "\n")
+  }
+}
+```
+
+## Prepare csv files for uploading the results onto Montagu
+```{r}
+library(data.table)
+dis <- "Typhoid"
+tstamp <- "20210930"
+
+for (vacc in c("novacc", "routine")) {
+  fl <- list.files("outputs/", pattern = paste0("central.*", dis, ".*", vacc, ".*", tstamp,  ".*rds$"), full.names = T)
+  d <- readRDS(fl)
+  fwrite(d, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".csv"))
+}
+
+# fls <- list.files("outputs", pattern = paste0("^param_combined.*", tstamp, ".*", dis, ".*", ".*rds$"), full.names = T)
+# x <- lapply(fls, function(x) readRDS(x))
+# d <- do.call(rbind, x)
+# fwrite(d, paste0("outputs/param_", dis, "_combined", tstamp, ".csv"))
+```
+
+## File names need to be changed according to VIMC input files
+Manually changed
+```{r}
+old <- c("routine_1","routine_2","campaign_1","campaign_2")
+new <- c("routine-default","routine-ia2030","campaign-default","campaign-ia2030")
+```
+
+
+## Combine parameters
+```{r}
+params_list <- readRDS("outputs/params_Typhoid_20220509T2333.rds")
+lst <- list()
+for (i in seq_along(target_countries_tf)) {
+  params <- params_list[[i]]
+  lst[[i]] <- params$params
+                  
+  # ir <- params[[1]]
+  # t_ir <- data.table::transpose(ir)
+  # colnames(t_ir) <- paste0("incid_rate_ag_", 0:100)
+  # t_cfr <- data.table::transpose(params$case_fatality_ratio)
+  # colnames(t_cfr) <- paste0("case_fatality_ratio_ag_", 0:100)
+  # lst[[i]] <- cbind(params$params, t_cfr)
+}
+res <- do.call(rbind, lst)
+# have separate values dependent on age and 
+# were not used for simulation
+# res$case_fatality_ratio <- NULL 
+# res <- do.call(rbind, params_list)
+dis <- "Typhoid"
+tstamp <- "20220511" # consitent with the name of the simulation results
+saveRDS(res, paste0("outputs/params_", dis, "_", tstamp, ".rds"))
+fwrite(res, paste0("outputs/params_", dis, "_", tstamp, ".csv"))
+```
+
+# Diagnostic IV: Negative population size
+Negative values can happen when there is population size for a certain age group
+is zero and in the previous year there are vaccinated people in one-year younger
+age group some value and model predicts some people move to the next age group,
+which is determined by the probability of dying and aging, vaccine  
+
+```{r}
+vacc_scenario <- c("novacc", "routine")
+tstamp <- "20210930"
+
+for (vacc in vacc_scenario) {
+  fl <- paste0("outputs/central_typhoid_", vacc, "_", tstamp, ".csv")
+  message(paste0("file = ", fl))
+  d <- fread(fl)
+  if(sum(d$cohort_size < 0) > 0){
+    message("Negative cohort size!")
+  }
+  if(sum(d$cases < 0) > 0){
+    message("Negative cases!")
+  }
+  if(sum(d$deaths < 0) > 0){
+    message("Negative deaths!")
+  }
+  if(sum(d$dalys < 0) > 0){
+    message("Negative dalys!")
+  }
+}
+```

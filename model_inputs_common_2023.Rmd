@@ -1,0 +1,29 @@
+---
+title: "Model inputs 2023"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+
+# Population interpolated (1-year time and age) for both sexes and wide format
+# were downloaded and the file name was "202310gavi-4_dds-202208_int_pop_both.csv"
+
+int_pop_both <-
+  fread("inst/extdata/202310gavi-4_dds-202208_int_pop_both.csv")
+population_data <- int_pop_both[, c("country", "age_from", as.character(2000:2100))]
+
+# population_data <- as.data.frame(fread("outputs/population_wide.csv"))
+# population_data$country <- clean_country_names(population_data$country)
+# fwrite(population_data, "outputs/population_wide.csv")
+usethis::use_data(population_data, overwrite = T)
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.

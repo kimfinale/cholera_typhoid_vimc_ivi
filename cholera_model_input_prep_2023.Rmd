@@ -1,0 +1,379 @@
+
+## Incidence rate by country
+Cholera-country level incidence rates are based on the study by Lessler et al. (2018) in
+which the grid-level incidence rate (20 km by 20 km) are provided.
+On the web repository (http://www.iddynamics.jhsph.edu/projects/cholera-dynamics), 
+estimates for the number of cases ("case.tif") and incidence rates ("rate.tif") were downloaded.
+
+```{r}
+library(raster)
+rate <- raster("data/rate.tif") # rate per person per 20 km by 20 km grid cell
+case <- raster("data/case.tif") # case per  20 km by 20 km grid cell
+af <- readRDS("data/africa_adm0_shp.rds") # country boundary to identify grid cells that belong to a country
+ppp <- readRDS("outputs/ppp_af_2010_20km.rds")# population density to get the number of cases
+# country names with subregion and region
+subregion_country <- read.csv("data/africa_subregion_country_names.csv")
+cntries <- af$NAME_0
+df <- data.frame(country = cntries, cases = NA, population = NA)
+for (cn in cntries) {
+  cnpoly <- af[af$NAME_0 == cn, ]
+  # extract cells that fall on to the country and sum cases
+  df[df$country == cn, ]$cases <- 
+    sum(raster::extract(case, cnpoly)[[1]], na.rm = TRUE)
+  # population size for the country
+  df[df$country == cn, ]$population <- 
+    sum(raster::extract(ppp, cnpoly)[[1]], na.rm = TRUE)
+}
+# divide the population size (UN) to get country-level incidence rate
+df$rate <- df$cases / df$population * 100000
+df$cases <- round(df$cases)
+
+incidence_rate_cholera <- 
+  data.frame(disease = "cholera", country = df$country, ir = df$rate)
+names(incidence_rate_cholera) <- 
+  c("disease", "country", "mean_incidence_per_100K")
+# saveRDS(incidence_rate_cholera, "outputs/cholera_incidence_rate_country_pop_2010.rds")
+usethis::use_data(incidence_rate_cholera, overwrite = T)
+
+# ## Prepare 2010 population raster
+# rst <- raster("data/ppp_2010_1km_Aggregated.tif")
+# rst <- raster::aggregate(rst, fact = 20, fun = sum)
+# rst <- raster::crop(rst, extent(ppp), snap = "out")
+# rst <- mask(rst, mask = af)
+# # saveRDS(rst, "outputs/ppp_af_2010_20km.rds")
+
+ir2 <- incidence_rate_cholera
+# combine with the previous incidence rate data file not to lose what I had
+# this file has incidence rates of typhoid fever as well
+ir1 <- fread("inst/extdata/incidence_rate.csv")
+library(dplyr)
+ir1 %>%
+  filter(disease == "Cholera") %>%
+  left_join(ir2, by = "country") -> ir_merged
+
+ir_countries <- data.frame(country = clean_country_names(target_countries))  
+ir2$country <- clean_country_names(ir2$country)
+ir_merged <- left_join(ir_countries, ir2, by = "country")
+ir_merged$disease <- "cholera"
+# fwrite(ir_merged, "outputs/ir_cholera.csv")
+reported_cholera <- fread("data/cholera_reported_WHO.csv")
+setnames(reported_cholera, c("country", "year", "num_cholera_reported"))
+reported_cholera[, num_cholera_reported := as.integer(num_cholera_reported)]
+
+pop_cntry_yr <- gavi201910_int_pop_both %>%
+  filter(year > 1900) %>% 
+  select(country, age_to, year, value) %>%
+  group_by(country, year) %>% 
+  summarise(pop = sum(value))
+
+pop_cntry_yr$country <- clean_country_names(pop_cntry_yr$country)
+reported_cholera$country <- clean_country_names(reported_cholera$country)
+
+reported_cholera <- left_join(reported_cholera, pop_cntry_yr, by = c("country","year"))
+reported_cholera[, reported_case_per_100K := 1e5*num_cholera_reported/pop]
+
+reported_cholera %>% 
+  filter(year > 1999) %>%
+  group_by(country) %>%
+  summarize(mean = mean(reported_case_per_100K, na.rm = T),
+            median = median(reported_case_per_100K, na.rm = T),
+            sd = sd(reported_case_per_100K, na.rm = T),
+            sample_size = n(),
+            max = max(reported_case_per_100K, na.rm = T),
+            min = min(reported_case_per_100K, na.rm = T)) -> reported_cholera_summary
+            
+ir <- left_join(ir_merged, reported_cholera_summary, by = "country")
+
+names(ir) <- c("country", "disease", "raster_estimate", "mean", "median", "sd",
+               "sample_size", "max", "min")
+
+ir %>% mutate(se = sd / sqrt(sample_size),
+              upper = ifelse(mean + 1.96*se > 0, mean + 1.96*se, 0),
+              lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)) -> ir
+
+# fwrite(ir, "outputs/cholera_model_estimate_WHO_reported.csv")
+# ir <- fread("outputs/cholera_model_estimate_WHO_reported.csv")
+
+## Bangladesh
+## average from 1990 to 2000 as the data from 2001 not available
+reported_cholera[country == "Bangladesh" & year %in% 1990:2000] -> ban
+mean <- mean(ban$reported_case_per_100K, na.rm = T)
+median = median(ban$reported_case_per_100K, na.rm = T)
+sd = sd(ban$reported_case_per_100K, na.rm = T)
+sample_size = sum(!is.na(ban$reported_case_per_100K))
+max = max(ban$reported_case_per_100K, na.rm = T)
+min = min(ban$reported_case_per_100K, na.rm = T)
+se = sd / sqrt(sample_size)
+upper = mean + 1.96*se
+lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)
+
+vec <- c(mean, median, sd, sample_size, max, min, se, upper, lower)
+ir[ir$country == "Bangladesh", 4:12] <- vec
+ 
+## Tanzania, 
+## average of East Africa
+africa <- fread("inst/extdata/africa_subregion_country_names.csv")
+africa %>% filter(Subregion == "Eastern Africa") -> east_africa
+east_africa$Country <- clean_country_names(east_africa$Country)
+reported_cholera %>% 
+  filter(year > 1999 & country %in% east_africa$Country) %>% 
+  summarize(mean = mean(reported_case_per_100K, na.rm = T),
+            median = median(reported_case_per_100K, na.rm = T),
+            sd = sd(reported_case_per_100K, na.rm = T), 
+            sample_size = sum(!is.na(reported_case_per_100K)),
+            max = max(reported_case_per_100K),
+            min = min(reported_case_per_100K, na.rm = T),
+            se = sd / sqrt(sample_size),
+            upper = mean + 1.96*se,
+            lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)) -> east_africa_cholera_ir
+
+ir[grepl("Tanzania", ir$country), 4:12] <- east_africa_cholera_ir[1,]
+#Algeria
+alg_raster_estimate <- unlist(ir[grepl("Algeria", ir$country), 3])
+ir[grepl("Algeria", ir$country), 11] <- alg_raster_estimate
+ir[grepl("Algeria", ir$country), 12] <- alg_raster_estimate
+# fwrite(ir, "outputs/cholera_model_estimate_WHO_reported.csv")
+```
+
+
+## Case fatality ratio 
+```{r}
+d <- fread("inst/extdata/cholera_case_fatality_ratio.csv")
+d$country <- clean_country_names(d$country)
+d %>% filter(year > 1999) %>% 
+  group_by(country) %>% 
+  summarize(mean = mean(cfr, na.rm = T),
+            median = median(cfr, na.rm = T),
+            min = min(cfr, na.rm = T),
+            max = max(cfr, na.rm = T),
+            sd = sd(cfr, na.rm = T),
+            sample_size = n(),
+            se = sd / sqrt(sample_size),
+            upper = mean + 1.96*se,
+            lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)) -> cholera_cfr_summary
+
+## Bangladesh
+## average from 1990 to 2000 as the data from 2001 not available
+d[country == "Bangladesh" & year %in% 1990:2000] -> ban
+mean <- mean(ban$cfr, na.rm = T)
+median = median(ban$cfr, na.rm = T)
+min = min(ban$cfr, na.rm = T)
+max = max(ban$cfr, na.rm = T)
+sd = sd(ban$cfr, na.rm = T)
+sample_size = sum(!is.na(ban$cfr))
+se = sd / sqrt(sample_size)
+upper = mean + 1.96*se
+lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)
+vec <- c(mean, median, min, max, sd, sample_size, se, upper, lower)
+for(i in 2:10) {
+  cholera_cfr_summary[cholera_cfr_summary$country == "Bangladesh", i] <- vec[i-1]
+}
+cholera_cfr_summary <- rbind(cholera_cfr_summary, tail(cholera_cfr_summary, 1))
+
+tan <- target_countries[!target_countries %in% unique(cholera_cfr_summary$country)]
+cholera_cfr_summary[47, 1] <- tan
+## Tanzania, 
+## average of East Africa
+africa <- fread("inst/extdata/africa_subregion_country_names.csv")
+africa %>% filter(Subregion == "Eastern Africa") -> east_africa
+east_africa$Country <- clean_country_names(east_africa$Country)
+d %>% 
+  filter(year > 1999 & country %in% east_africa$Country) %>% 
+  summarize(mean = mean(cfr, na.rm = T),
+            median = median(cfr, na.rm = T),
+            min = min(cfr, na.rm = T),
+            max = max(cfr, na.rm = T),
+            sd = sd(cfr, na.rm = T),
+            sample_size = n(),
+            se = sd / sqrt(sample_size),
+            upper = mean + 1.96*se,
+            lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)) -> east_africa_cholera_cfr_summary
+
+cholera_cfr_summary[47, 2:10] <- east_africa_cholera_cfr_summary[1,]
+## Algeria use the data from 1980 because of the paucity of the data
+d %>% 
+  filter(year > 1979 & country  == "Algeria") %>% 
+  summarize(mean = mean(cfr, na.rm = T),
+            median = median(cfr, na.rm = T),
+            min = min(cfr, na.rm = T),
+            max = max(cfr, na.rm = T),
+            sd = sd(cfr, na.rm = T),
+            sample_size = n(),
+            se = sd / sqrt(sample_size),
+            upper = mean + 1.96*se,
+            lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)) -> alg_cfr_summary
+
+cholera_cfr_summary[2, 2:10] <- alg_cfr_summary[1, 1:9]
+# fwrite(cholera_cfr_summary, "outputs/cholera_cfr.csv")
+```
+
+
+## Population at risk of cholera or typhoid fever
+We assume that people who have at least basic sanitation are safe from these diseases (or at least, have reduced risk).
+We used the WaSH data from JMP (2000-2017) to fit a saturating exponential function to roughly estimate the trend of WaSH.
+
+## Estimate the proportion of population with access to basic sanitation services
+WaSH data were downloaded from [JMP](https://washdata.org/data/downloads#WLD) and Household World file.
+The data in Excel worksheet format has 4 tabs: introduction and 3 data sheets (water, sanitation, and hygiene).
+We assume that people with at least basic sanitation are protected from cholera, which is a simplifying assumption, which will be addressed (eg, we can alternatively assume that they have lower risk of infection). 
+The data file was opened in MS Excel and each data tab was saved as csv (JMP2019_WLD_water.csv, JMP2019_WLD_sanitation.csv, JMP2019_WLD_hygiene.csv) 
+
+```{r}
+devtools::load_all()
+library(data.table)
+ref <- fread("central-burden-template.201910gavi-5.Cholera_IVI-Kim_standard_full-run.csv")
+target_countries <- clean_country_names(unique(ref$country_name))
+dat <- fread("inst/extdata/JMP_2019_WLD_sanitation.csv")
+dat <- dat[-c(1,2,4179,4180), c(1,3,6:9)] # after viewing the file, rows and columns were decided.
+names(dat) <- c("country", "year", "at_least_basic", "limited", "unimproved", "open_defecation")
+
+dat[, year := as.double(year)]
+dat[, country := clean_country_names(country)]
+dat <- as.data.frame(dat)
+for(i in 1:nrow(dat)){
+  for(j in 1:ncol(dat)){
+    val <- dat[i, j]
+    cat("i=", i, "j=", j, "val=", val,"\n")
+    if(!is.na(val)){
+      if(val == "<1") {
+        dat[i, j] <- 0.5
+      }
+      if(val == "-") {
+        dat[i, j] <- NA
+      }
+      if(val == ">99") {
+        dat[i, j] <- 99.5
+      }
+    }
+  }
+}
+dat <- setDT(dat)
+dat <- dat[!is.na(dat$open_defecation),]
+## for all of the countries on the list
+cntries <- unique(dat$country)
+## optim fit
+## multiple initial values are used and the best fit (minimum value) is chosen
+starts <- pomp::sobol_design(lower = c(par1=1900, par2=1e-6), upper = c(par1=2000, par2=1), nseq=10)
+
+fitres <- list()
+for (i in 1:length(cntries)) {
+  cntry <- cntries[i]
+  message(paste0("i = ", i, ", country = ", cntry))
+  # x <- dat[country == cntry, .(year, open_defecation = 1 - as.double(open_defecation)/100)]
+  # x <- dat[country == cntry, .(year, at_least_basic = as.double(at_least_basic) / 100)]
+  # x <- dat[country == cntry, .(year, limited = 1 - (as.double(limited) / 100))]
+  x <- dat[country == cntry, .(year, improved = 1 - (as.double(unimproved) / 100))]
+  fitvals <- rep(NA, nrow(starts))
+  fitlist <- list()
+  for(j in 1:nrow(starts)){ # multiple starting points to ensure a good fit
+    f <- optim(
+      par = c(starts$par1[j], starts$par2[j]),
+      fn = ssq,
+      x = x,
+      hessian = TRUE,
+      control = list(trace = 0))
+    fitvals[j] <- f$value
+    fitlist[[j]] <- f
+    
+  }
+  fit <- fitlist[[which(fitvals == min(fitvals))]]
+  fitres[[i]] <- fit
+  fitres[[i]]$country <- cntry 
+}
+
+for (i in seq_along(cntries)) {  
+  cntry <- cntries[i]
+  cat("i =", i , "/", length(cntries), "\n")
+  # d <- dat[country == cntries[i], .(year, open_defecation = 1 - open_defecation)]
+  # d <- dat[country == cntries[i], .(year, at_least_basic = as.double(at_least_basic) / 100)]
+  # d <- dat[country == cntry, .(year, limited = 1 - (as.double(limited) / 100))]
+  d <- dat[country == cntry, .(year, improved = 1 - (as.double(unimproved) / 100))]
+  x <- 2000:2100
+  plot(x, 1 - exp(-fitres[[i]]$par[[2]] * (x - fitres[[i]]$par[[1]])), type='l',
+       main = cntries[i], ylim=c(0,1))
+  points(d[[1]], d[[2]], col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+for (i in seq_along(fitres)){
+  cat("i =", i , "/", length(cntries), "\n")
+  if(det(fitres[[i]]$hessian) > 0){
+    fitres[[i]]$stderr <- sqrt(abs(diag(solve(fitres[[i]]$hessian))))
+  } else {
+    fitres[[i]]$stderr <- NA
+  }
+}
+
+
+# tstamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+# saveRDS(fitres, paste0("outputs/fit_1_minus_unimproved", tstamp, ".rds"))
+
+# stderr <- sqrt(abs(diag(solve(fit$hessian))))
+# R0_CI <- fit$par["R0"] + c(-1,1)*1.96*stderr["R0"]
+# k_CI <- fit$par["k"] + c(-1,1)*1.96*stderr["k"]
+
+## create proportion by year based on the fit
+fitlist <- readRDS("outputs/fit_1_minus_open_defecation20210813T200404.rds")
+prop_no_open_defecation <- setDT(expand.grid(year = 2000:2100, country = target_countries))
+prop_no_open_defecation[, pred := 0]
+
+for (i in seq_along(target_countries)) {
+  pars <- fitlist[[i]]$par
+  prop_no_open_defecation[country == target_countries[i], pred := (1 - exp(-pars[2] * (year - pars[1])))]
+}
+## Remove negative values
+prop_no_open_defecation[, pred := pmax(pred, 0)]
+
+names(prop_no_open_defecation) <- c("year", "country", "prop")# check the order! 
+usethis::use_data(prop_no_open_defecation, overwrite = TRUE)
+# fwrite(prop_no_open_defecation, "outputs/prop_no_open_defecation.csv")
+ 
+# prop_basic_san <- setDT(expand.grid(year = 2000:2100, country = target_countries))
+# prop_basic_san$pred <- 0
+# 
+# for (i in seq_along(target_countries)) {
+#   prop_basic_san[country == target_countries[i], pred := (1 - exp(-fit[i,2] * (year - fit[i, 1])))]
+#   # san %>% filter(country == target_countries[i]) %>% 
+#   #   mutate(pred = (1 - exp(-fit[i,2] * (year - fit[i, 1])))) -> san
+# }
+# ## Remove negative values
+# prop_basic_san[, pred := pmax(pred, 0)]
+#   
+## take the mean over the previous years 
+
+
+## For countries where no data are available, we take the mean of all countries
+## for which proportion of population is available from year 2000 onwards
+mean2000 <- prop_basic_san[year == 2000, mean(pred)]
+nodata <- c(11, 23, 64, 65, 84)
+for (i in seq_along(nodata)) {
+  id <- nodata[i]
+  prop_basic_san[country == target_countries[id], pred := rep(mean2000, 101)]
+}
+## check again if values are reasonable by plotting them
+for (i in seq_along(target_countries)) {  
+  cat("i =", i , "/", length(target_countries), "\n")
+  dsan <- d[country == target_countries[i]] 
+  pred <- prop_basic_san[country == target_countries[i]] 
+  plot(pred$year, pred$pred, type='l', main = target_countries[i])
+  points(dsan$year, dsan$prop, col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+#
+## Congo, Republic of the missing and fitting again
+dsan <- d[country == "Congo, Republic of the"]
+fit <- saturating_exp_fit(x = dsan, 
+                          start = c(2000, 1e-1),
+                          lower = c(1e-6, 1e-6),
+                          upper = c(2100-1e-3, 10)) 
+
+prop_basic_san_congo <- data.frame(year = 2000:2100, country = "Congo, Republic of the", prop = NA)
+prop_basic_san_congo$prop <- 1 - exp(-fit[2] * (prop_basic_san_congo$year - fit[1]))
+
+plot(prop_basic_san_congo$year, prop_basic_san_congo$prop, type='l', main = unique(dsan$country))
+points(dsan$year, dsan$prop, col=2)
+prop_basic_san <- rbind(prop_basic_san, prop_basic_san_congo)
+
+names(prop_basic_san) <- c("year", "country", "prop")# check the order! 
+usethis::use_data(prop_basic_san, overwrite = TRUE)
+```

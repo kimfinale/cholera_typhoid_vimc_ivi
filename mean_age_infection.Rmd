@@ -1,0 +1,325 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+
+### Mean age of infection 
+Mean age of infection, $A$, can be used to approximate $R_0$ for a given 
+life expectancy, $L$. 
+$$R_0 \approx L/A$$
+calculating $A$ can be done using force of infection, $\lambda$
+
+```{r}
+# force of infection, lambda, can be interpreted as the probability of infection per year
+lambda <- 0.012 # per year per person
+# assuming exponential distribution and infinite time makes the average waiting time is 1 / lambda
+A <- 1 / lambda
+A
+```
+
+### What happens if we have a limited life span (i.e., life expectancy)?
+```{r}
+# force of infection, lambda, can be interpreted as the probability of infection per year
+lambda <- 0.012 # per year per person
+L <- 80 # life expectancy
+# mean age of infection is the same as the proportion of people remain susception 
+A <- 1/(lambda + 1/L)
+A
+```
+
+### Age distribution by year 
+```{r}
+pop_by_age = c(120, 99, 78, 60)
+foi_by_age = c(0.01, 0.1, 0.05, 0.01)
+age = 0:3
+age_inf = age + (foi_by_age + 1)
+A = sum(age_inf * pop_by_age / sum(pop_by_age))
+A
+```
+
+### ODE model - SIRS 
+```{r}
+ode_open_sir <- function(t, y, params) {
+  S <- y[1]; I <- y[2]; R <- y[3]; CI <- y[4]; FOI <- y[5]  ## now extract the parameters
+  beta <- params["beta"]
+  gamma <- params["gamma"]
+  mu <- params["mu"]
+
+  N <- S + I + R # total population
+  FOI <- beta * I / N # force of infection
+  
+  dS <- - FOI*S + mu*(N-S)
+  dI <- FOI*S - gamma*I - mu*I
+  dR <- gamma*I - mu*R
+  dCI <- FOI*S
+  dFOI <- FOI
+  
+  return(list(c(dS, dI, dR, dCI, dFOI)))
+}
+```
+
+## Check $A, L, R_0$ using the ODE model
+
+```{r}
+library(deSolve)
+library(tidyverse)
+L = 20 # life expectancy, which is intentionally set to be short to make the dynamics converge quickly
+R0 = 1.5
+gamma = 0.2*365
+beta = R0 * (gamma + 1/L)
+
+params <- c(beta = beta, gamma = gamma, mu = 1/L) # per year
+y0 <- c(S = 1e5-10, I = 10, R = 0, CI = 0, FOI = 0)
+tend <- 500
+times <- seq(0, tend, by = 1) # daily output for 150 days
+
+ode(y = y0, times = times, func = ode_open_sir, parms = params) %>% 
+  as.data.frame() -> out 
+
+out %>% 
+  ggplot(aes(time, FOI)) +
+  geom_line()
+
+lambda = tail(diff(out$FOI), 1)
+A = 1 / (lambda + 1/L)
+A
+L/A
+```
+
+## Two-age group model
+```{r}
+ode_open_sir_2ag <- function(t, y, params) {
+  S_1 <- y[1]; I_1 <- y[2]; R_1 <- y[3]; CI_1 <- y[4]; FOI_1 <- y[5]  
+  S_2 <- y[6]; I_2 <- y[7]; R_2 <- y[8]; CI_2 <- y[9]; FOI_2 <- y[10]
+  
+  beta <- params["beta"]
+  gamma <- params["gamma"]
+  mu <- params["mu"]
+  ag <- params["ag"]
+
+  N <- S_1 + I_1 + R_1 + S_2 + I_2 + R_2 # total population
+  FOI <- beta * (I_1 + I_2) / N # force of infection
+  FOI_2 <- FOI_1 <- FOI
+  
+  dS_1 <- - FOI*S_1 + mu*(N-S_1) - ag*S_1
+  dI_1 <- FOI*S_1 - gamma*I_1 - mu*I_1 - ag*I_1
+  dR_1 <- gamma*I_1 - mu*R_1 - ag*R_1
+  dCI_1 <- FOI*S_1
+  dFOI_1 <- FOI_1
+  
+  dS_2 <- - FOI*S_2 - mu*S_2 + ag*S_1 
+  dI_2 <- FOI*S_2 - gamma*I_2 - mu*I_2 + ag*I_1
+  dR_2 <- gamma*I_2 - mu*R_2 + ag*R_1
+  dCI_2 <- FOI*S_2
+  dFOI_2 <- FOI_2
+  
+  return(list(c(dS_1, dI_1, dR_1, dCI_1, dFOI_1, dS_2, dI_2, dR_2, dCI_2, dFOI_2)))
+}
+```
+
+## Check $A, L, R_0$ using the ode model
+
+```{r}
+library(deSolve)
+library(tidyverse)
+## R0 = 1.5 and L = 10
+L = 20 # life expectancy, which is intentionally short to make the dynamics converge quickly
+mu = 1 / L
+R0 = 1.2
+gamma = 0.2*365
+beta = R0 * (gamma + mu)
+ag = 1/2
+
+params <- c(beta = beta, gamma = gamma, mu = mu, ag = ag) # per year
+y0 <- c(S_1 = (1e5-10)/2, I_1 = 10/2, R_1 = 0, CI_1 = 0, FOI_1 = 0,
+        S_2 = (1e5-10)/2, I_2 = 10/2, R_2 = 0, CI_2 = 0, FOI_2 = 0)
+tend <- 500
+times <- seq(0, tend, by = 1) # daily output for 150 days
+
+ode(y = y0, times = times, func = ode_open_sir_2ag, parms = params) %>% 
+  as.data.frame() -> out 
+
+out %>% 
+  ggplot(aes(time, FOI_1)) +
+  geom_line()
+
+out %>% 
+  ggplot(aes(time, S_1)) +
+  geom_line()
+
+lambda = tail(diff(out$FOI_1), 1)
+
+S_1 = tail(out$S_1, 1)
+S_2 = tail(out$S_2, 1)
+
+out_rates_ag1 <- ag + mu + lambda
+
+A_ag = S_1/(S_1 + S_2)*(1/out_rates_ag1) + 
+  S_2/(S_1 + S_2)*(1/out_rates_ag1 + 1/(lambda + mu))
+
+A = 1 / (lambda + 1/L)
+A
+A_ag
+L/A
+L/A_ag
+```
+
+I think a better strategy would be to calculate averaged $lambda$ and then calculate the $L/A$ where $L$ should come from the final age group
+
+$$\omega = \frac{F(p)}{F(0)} = \frac{R_0(1-Pe)-1}{R_0 - 1}$$
+
+## Test with the simulation data set
+```{r}
+devtools::load_all()
+
+library(tidytable)
+library(tidyverse)
+
+template <- 
+  fread("inst/extdata/central-burden-template.202108test-1.Typhoid_IVI-Kim_standard.csv")
+target_countries <- clean_country_names(unique(template$country_name))
+cntry <- target_countries[1]
+# parameters to explore
+parameter_data <- fread("inst/extdata/parameters.csv")
+vacc_cov_data <- 
+  fread('inst/extdata/coverage_202108test-1_typhoid-routine-default.csv')
+population_data <- as.data.frame(fread("outputs/population_wide.csv"))
+
+cntry <- unique(vacc_cov_data$country)[1]
+incid_data_typhoid %>%
+  filter.(measure == "Incidence", year == 2015, location %in% cntry) %>%
+  as.data.frame() -> ir_data
+
+ir <- spread_age_IHME(ir_data)
+
+year <- "2000:2100"
+pop <- setup_cohorts(country = cntry,
+                     year = eval(parse(text = year)),
+                     population_data = population_data)
+
+pop_wt <- apply(pop, 2, function(x) x / colSums(pop))
+foi <- rep(NA, ncol(pop_wt))
+for(i in 1:ncol(pop_wt)) {
+  foi[i] <- sum(ir/1e5 * pop_wt[, i])
+}
+
+life_expectancy <- 66.6 # Ethiopia
+A <- 1 / (foi + 1/life_expectancy)
+R0 <- life_expectancy / A
+summary(R0)
+
+calc_mean_R0 <- function(L) {
+  mean_R0 <- rep(NA, length(L))
+  for (i in 1:length(L)) {
+    A <- 1 / (foi + 1/L[i])
+    mean_R0[i] <- mean(L[i] / A)
+  }
+  return(mean_R0)
+}
+
+L <- 50:100
+plot(L, calc_mean_R0(L))
+
+foi[1]*L[1]/ (1 - exp(-foi[1]*L[1]))
+(foi[1] + 1/L[1])*L[1]
+
+A <- 1/(foi[6] + 1)
+
+a <- 1/(foi + 1)
+a <- a + 0:100
+A <- sum(a * pop_wt[,20])
+```
+
+## vaccine coverage
+```{r}
+devtools::load_all()
+
+library(tidytable)
+library(tidyverse)
+
+template <- 
+  fread("inst/extdata/central-burden-template.202108test-1.Typhoid_IVI-Kim_standard.csv")
+target_countries <- clean_country_names(unique(template$country_name))
+cntry <- target_countries[1]
+# parameters to explore
+parameter_data <- fread("inst/extdata/parameters.csv")
+vacc_cov_data <- 
+  fread('inst/extdata/coverage_202108test-1_typhoid-routine-default.csv')
+population_data <- as.data.frame(fread("outputs/population_wide.csv"))
+
+cntry <- unique(vacc_cov_data$country)[1]
+incid_data_typhoid %>% 
+  filter.(measure == "Incidence", year == 2015, location %in% cntry) -> ir_data
+
+ir <- spread_age_IHME(as.data.frame(ir_data))
+
+year <- "2000:2100"
+pop <- setup_cohorts(country = cntry,
+                     year = eval(parse(text = year)),
+                     population_data = population_data)
+
+vacc_cov <- create_vaccine_coverage(country = cntry,
+                                    population = pop,
+                                    vaccine_coverage_data =        
+                                      vaccine_coverage_data)
+
+pop_wt <- apply(pop, 2, function(x) x / colSums(pop))
+
+overall_cov <- rep(NA,  ncol(pop_wt))
+for (i in 1:ncol(pop_wt)) {
+  overall_cov[i] <- sum(vacc_cov[, i] * pop_wt[, i])
+}
+summary(overall_cov)
+```
+
+
+```{r}
+
+library(ggplot2)
+library(manipulate)
+
+R0 = 1.1
+calc_omega <- function(R0, Pe){
+  omega = (R0*(1-Pe)-1)/(R0 - 1)
+  omega[omega < 0] = 0
+  return (omega)
+}
+
+manipulate(
+  { 
+  Pe = seq(0.01, 0.3, length.out = 50)
+  omega = calc_omega(R0, Pe)
+  data.frame(Pe = Pe,
+             omega = omega) %>% 
+  ggplot(aes(Pe, omega)) +
+    geom_line() +
+    labs(x = "Pe", y = "Adjustment factor, omega", color = "")
+  },
+  R0 = slider(1.1, 1.5, initial = 1.1, step = 0.05)
+)
+
+```
+
+```{r}
+  output$cohort_size <- pop # cohort size is assumed to be the total population
+
+
+  if (tolower(vacc_scenario) %in% c("routine", "campaign")) {
+    vacc_protected <-
+      calculate_vaccine_protected(
+        disease = dis,
+        country = cntry,
+        population = pop,
+        vaccine_coverage = vacc_cov,
+        vaccine_efficacy = parameter_sample$vacc_efficacy,
+        vaccine_immunity_duration = parameter_sample$duration_vacc_protection,
+        exponential_decay = TRUE,
+        vaccine_efficacy_by_year = NULL)
+
+    pop <- pop - vacc_protected
+}
+```
+

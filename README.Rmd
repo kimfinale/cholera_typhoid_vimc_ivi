@@ -1,9 +1,15 @@
 ---
 title: "R Notebook"
-output: html_notebook
-editor_options: 
+output:
+  html_document:
+    df_print: paged
+editor_options:
   chunk_output_type: console
 ---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = '', fig.width = 6, fig.height = 6)
+```
 
 ## Read and save data
 ```{r}
@@ -55,7 +61,7 @@ library(tidyverse)
 p_dying_age <- fread("data/201910gavi-5_dds-201910_p_dying_both.csv")
 p_dying_age[, country := clean_country_names(country)] 
 use_data(p_dying_age, overwrite = T)
-# 
+ 
 # country_name_table <- fread("data/country_names.csv")
 # names(country_name_table) <- c("country", "iso3")
 # country_name_table <- country_name_table[1:112,] # remove the bottom row, Total
@@ -68,7 +74,7 @@ We assume that people who have at least basic sanitation are safe from these dis
 We used the WaSH data from JMP (2000-2017) to fit a saturating exponential function to roughly estimate the trend of WaSH.
 
 ```{r}
-# d <- fread("data/JMP2019.csv")
+# d <- fread("inst/extdata/JMP2019.csv")
 # d <- d[-(1:3),]
 # d <- d %>% filter(V3 == 'National') %>% select(V1, V2, V3, V17) # country, year, rural/urban/national, percent population with access to basic sanitation services
 # names(d) <- c("country", "year", "rural/urban/national", "prop_san")
@@ -140,62 +146,64 @@ We assume that people with at least basic sanitation are protected from cholera,
 The data file was opened in MS Excel and each data tab was saved as csv (JMP2019_WLD_water.csv, JMP2019_WLD_sanitation.csv, JMP2019_WLD_hygiene.csv) 
 
 ```{r}
-# d <- fread("data/JMP_2019_WLD_sanitation.csv")
-# d <- d[-c(1,2,4179,4180), c(1,3,6)] # after viewing the file, rows and columns were decided.
-# names(d) <- c("country", "year", "prop_san") # proportion of population with at least basic sanitation 
-# d[, year := as.double(year)]
-# d[, prop_san := as.double(prop_san)/100]# make percents to fractions 
-# d <- d[!is.na(d$prop_san),]
-# d[, country := clean_country_names(country)]
-# 
-# ## Select a country of interest
-# san <- d %>% filter(country == target_countries_cholera[5])
-# 
-# f <- function (theta, x) {1 - exp(-theta[2] * (x - theta[1]))} # saturating exponential function is fitted
-# 
-# yr <- san$year
-# prop <- san$prop_san
-# 
-# ssq <- function(theta){
-#   tau <- theta[1]
-#   k <- theta[2]/(1-theta[2])
-#   sum((prop - (1 - exp(-k * (yr - tau))))^2)
-# }
-# 
-# library(optimx)
-# start <- c(1990, 1e-3)
-# lower <- c(1e-6, 1e-6)
-# upper <- c(2000-1e-3, 10)
-# 
-# fit <- optimx(par = start,
-#               fn = ssq,
-#               method = 'nlminb',
-#               lower = lower, 
-#               upper = upper,
-#               itnmax = 100,
-#               control = list(trace=5))
-# 
-# ## Quick diagnostic plot
-# x <- 2000:2100 
-# plot(x, 1 - exp(-fit$p2 * (x - fit$p1)), type='l')
-# points(yr, prop, col=2)
-# 
-# prop_san <- data.frame(country = target_countries_cholera[2], yr = 2000:2100)
-# prop_san$pred <- 1 - exp(-fit$p2 * (prop_san$yr - fit$p1))
-# # 
-# prop_san2 <- data.frame(country = target_countries_cholera[3], yr = 2000:2100)
-# prop_san2$pred <- 1 - exp(-fit$p2 * (prop_san2$yr - fit$p1))
-# 
-# prop_san3 <- data.frame(country = target_countries_cholera[4], yr = 2000:2100)
-# prop_san3$pred <- 1 - exp(-fit$p2 * (prop_san3$yr - fit$p1))
-# 
-# prop_san4 <- data.frame(country =  target_countries_cholera[5], yr = 2000:2100)
-# prop_san4$pred <- 1 - exp(-fit$p2 * (prop_san4$yr - fit$p1))
-# 
-# prop_basic_san2 <- rbind(prop_san, prop_san2, prop_san3, prop_san4)
-# names(prop_basic_san2) <- c("country", "year", "prop")
-# prop_basic_san <- rbind(prop_basic_san, prop_basic_san2)
-# use_data(prop_basic_san, overwrite = TRUE)
+d <- data.table::fread("inst/extdata/JMP_2019_WLD_sanitation.csv")
+d <- d[-c(1,2,4179,4180), c(1,3,6)] # after viewing the file, rows and columns were decided.
+names(d) <- c("country", "year", "prop_san") # proportion of population with at least basic sanitation
+d[, year := as.double(year)]
+d[, prop_san := as.double(prop_san)/100]# make percents to fractions
+d <- d[!is.na(d$prop_san),]
+d[, country := clean_country_names(country)]
+
+
+
+## Select a country of interest
+san <- d %>% filter(country == target_countries_cholera[5])
+
+f <- function (theta, x) {1 - exp(-theta[2] * (x - theta[1]))} # saturating exponential function is fitted
+
+yr <- san$year
+prop <- san$prop_san
+
+ssq <- function(theta){
+  tau <- theta[1]
+  k <- theta[2]/(1-theta[2])
+  sum((prop - (1 - exp(-k * (yr - tau))))^2)
+}
+
+library(optimx)
+start <- c(1990, 1e-3)
+lower <- c(1e-6, 1e-6)
+upper <- c(2000-1e-3, 10)
+
+fit <- optimx(par = start,
+              fn = ssq,
+              method = 'nlminb',
+              lower = lower,
+              upper = upper,
+              itnmax = 100,
+              control = list(trace=5))
+
+## Quick diagnostic plot
+x <- 2000:2100
+plot(x, 1 - exp(-fit$p2 * (x - fit$p1)), type='l')
+points(yr, prop, col=2)
+
+prop_san <- data.frame(country = target_countries_cholera[2], yr = 2000:2100)
+prop_san$pred <- 1 - exp(-fit$p2 * (prop_san$yr - fit$p1))
+#
+prop_san2 <- data.frame(country = target_countries_cholera[3], yr = 2000:2100)
+prop_san2$pred <- 1 - exp(-fit$p2 * (prop_san2$yr - fit$p1))
+
+prop_san3 <- data.frame(country = target_countries_cholera[4], yr = 2000:2100)
+prop_san3$pred <- 1 - exp(-fit$p2 * (prop_san3$yr - fit$p1))
+
+prop_san4 <- data.frame(country =  target_countries_cholera[5], yr = 2000:2100)
+prop_san4$pred <- 1 - exp(-fit$p2 * (prop_san4$yr - fit$p1))
+
+prop_basic_san2 <- rbind(prop_san, prop_san2, prop_san3, prop_san4)
+names(prop_basic_san2) <- c("country", "year", "prop")
+prop_basic_san <- rbind(prop_basic_san, prop_basic_san2)
+use_data(prop_basic_san, overwrite = TRUE)
 ```
 
 ## Vaccine coverage data
@@ -251,8 +259,6 @@ dis <- "Typhoid"
 
 vc_cmp_chol <- lapply(target_countries_cholera, function(x) create_vaccine_coverage(country = x, disease ="Cholera", routine = F))
 vc_cmp_ty <- lapply(target_countries, function(x) create_vaccine_coverage(country = x, disease ="typhoid", routine = F))
-
-
 ```
 
 ## Simulation 

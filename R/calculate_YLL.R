@@ -6,11 +6,12 @@
 #' @export
 #' @examples
 #' calculate_YLL(cases = cases)
-calculate_YLL <- function (disease = c("Typhoid", "Cholera"),
+calculate_YLL <- function (disease = NULL,
                            cases = NULL,
                            country = NULL,
-                           year = 2000:2100,
-                           case_fatality_ratio = NULL) {
+                           year = NULL,
+                           life_expectancy = NULL,
+                           case_fatality = NULL) {
 
   # if(!exists("life_expectancy")) {
   #   life_expectancy <- data.table::fread(life_expectancy_data)
@@ -23,34 +24,19 @@ calculate_YLL <- function (disease = c("Typhoid", "Cholera"),
   if (is.null(cases)) {
     stop("Cases must be provided")
   }
-  if (is.null(case_fatality_ratio)){
-    case_fatality_ratio <- parameters[tolower(disease) == tolower(dis) & definition == "case fatality ratio", value]
-    if (length(case_fatality_ratio) != 1){
-      stop("Length is not 1. case fatality ratio must be uniquely determined")
-    }
+  if (is.null(life_expectancy)) {
+    life_expectancy_data <-
+      fread("inst/extdata/201910gavi-5_dds-201910_2_life_ex_both.csv")
+    yr <- year
+    rm(year)
+    life_expectancy <-
+      get_life_expectancy(life_expectancy_data = life_expectancy_data,
+                          country = cntry, year = yr)
   }
 
-  country_clean <- clean_country_names(country)
-  rm(country)
-  yr <- year
-  rm(year)
-  life_exp1 <- life_expectancy %>%
-    dplyr::filter(country == country_clean, year %in% !!yr) %>%
-    dplyr::select(age_from, year, value) %>%
-    tidyr::pivot_wider(id_cols = c(age_from, year), names_from = year)
-
-  life_exp2 <- life_exp1[c(1, rep(2,4), rep(3:21, each=5), 22), ] ## add rows
-  life_exp2 <- life_exp2[,-1] # remove age column
-  life_exp <- life_exp2[, c(rep(seq_len(ncol(life_exp2)-1), each=5), rep(ncol(life_exp2), 6)) ] # add columns
-  names(life_exp) <- as.character(yr)
-
-  if (sum(dim(cases) == dim(life_exp)) != 2) {
-    stop("Dimensions do not match: cases and life expectancy")
-  }
-  if (length(case_fatality_ratio) == 1) {
-    case_fatality_ratio <- rep(case_fatality_ratio, nrow(cases))
-  }
-  YLL <- as.data.frame(lapply(1:ncol(cases), function(x) cases[, x] * case_fatality_ratio * life_exp[, x]))
+  YLL <-
+    as.data.frame(lapply(1:ncol(cases),
+                         function(x) cases[, x] * case_fatality * life_expectancy[, x]))
   names(YLL) <- names(cases)
 
   return (YLL)

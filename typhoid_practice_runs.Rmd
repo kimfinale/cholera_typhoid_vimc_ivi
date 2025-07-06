@@ -1,0 +1,568 @@
+---
+title: "typhoid_practice_runs"
+author: "Jong-Hoon Kim"
+date: "9/14/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Vaccine Impact Modeling Consortium data
+```{r}
+devtools::load_all()
+
+library(usethis)
+# prob_dying_age <- fread('inst/extdata/202110gavi-1_dds-201910_p_dying_both.csv')
+# use_data(prob_dying_age, overwrite = T)
+# remove p_dying_age as prob_dying_age sounds clearer
+# rm("data/p_dying_age.rda") this does not work, why? 
+dis <- "typhoid"
+vacc_cov_data <- fread('inst/extdata/coverage_202108test-1_typhoid-routine-default.csv')
+# test_countries <- c("China", "Pakistan", "India", "Nigeria", "Ethiopia")
+population_data <- as.data.frame(fread("outputs/population_wide.csv"))
+# population_data$country <- clean_country_names(population_data$country)
+# fwrite(population_data, "outputs/population_wide.csv")
+parameter_data <- fread("inst/extdata/parameters.csv")
+
+str_dis_severity <- c("Proportion of moderate typhoid fever",
+"Proportion of severe typhoid fever",
+"Proportion of severe typhoid fever with gastrointestinal bleeding",
+"Proportion of typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+
+str_dis_duration <- c("Duration of moderate typhoid fever",
+"Duration of severe typhoid fever",
+"Duration of severe typhoid fever with gastrointestinal bleeding",
+"Duration of  typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+
+str_dis_disability <- c("Disability weight for moderate typhoid fever",
+"Disability weight for severe typhoid fever",
+"Disability weight for severe typhoid fever with gastrointestinal bleeding",
+"Disability weight for severe typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+
+# # incidence data
+# incid_data_typhoid <- fread("data/IHME-GBD_2019_DATA-3268a4a1-1.csv")
+# incid_data_typhoid$country <- clean_country_names(incid_data_typhoid$location) 
+# usethis::use_data(incid_data_typhoid, overwrite = T)
+
+cntry <- unique(vacc_cov_data$country)
+
+incid_data_typhoid %>% 
+  filter.(measure == "Incidence", year == 2015, location %in% cntry) -> ir_data 
+
+incid_data_typhoid %>% 
+  filter.(measure == "Deaths", year == 2015, location %in% cntry) -> death_data 
+
+incid_data_typhoid %>% 
+  filter.(measure == "YLDs (Years Lived with Disability)",
+          year == 2015, location %in% cntry) -> yld_data 
+
+incid_data_typhoid %>% 
+  filter.(measure == "YLLs (Years of Life Lost)",
+          year == 2015, location %in% cntry) -> yll_data 
+
+# age category <1 year, 1 to 4, 5 to 9, ..., 90 to 94  
+# make age categories as in the incidence rate data (ir_data)
+spread_age_IHME <- function(data, age_total = 101, variable = "val") {
+  var <- match.arg(variable, c("val", "upper", "lower"))
+  cat_first <- "<1 year"
+  # next category starts "1 to 4", "5 to 9", ..., "90 to 94"
+  age0 <- c(1, seq(5, 90, by = 5))
+  age1 <- c(4, seq(9, 94, by = 5))
+  age_cat <- c(paste0(age0, " to ", age1))
+  
+  new_data <- rep(NA, age_total)
+  new_data[1] <- unlist(data[data$age == cat_first, var])
+  for (ag in age0) {
+    new_data[(ag+1):(ag+5)] <- 
+      unlist(data[data$age == age_cat[which(age0 == ag)], var])
+  } 
+  # 95-100 age groups were set to be the same as "90 to 94"
+  new_data[96:age_total] <- new_data[95]
+  
+  return(new_data)
+}
+
+extract_param_tf <- function(params_data, str, var_name = "value"){
+  var <- match.arg(var_name, c("value", "upper_bound", "lower_bound"))
+  params <- rep(NA, length(str))
+  params_data %>% filter(tolower(disease) == tolower(dis)) -> dat
+  for (i in 1:length(params)) {
+    dat %>% 
+    filter(definition == str[i]) %>%
+    select(eval(var)) %>% 
+    unlist() -> params[i]
+  }
+  return(params)
+}
+
+```
+
+
+## Target countries and vaccine coverages
+```{r setup, include=FALSE}
+devtools::load_all()
+# load additional packages
+# library(tidyverse)
+
+dis <- "typhoid"
+
+# test_countries <- c("China", "Pakistan", "India", "Nigeria", "Ethiopia")
+test_countries <- unique(vacc_cov_data$country)
+cntry <- test_countries[1]
+
+pop <- setup_cohorts(country = cntry)
+
+vc <- create_vaccine_coverage(disease = dis,
+                        country = cntry,
+                        population = pop,
+                        vaccine_coverage_data = vacc_cov_data)
+
+vacc_protected <- calculate_vaccine_protected(disease = dis,
+                                         country = cntry,
+                                         population = pop,
+                                         year = 2000:2100,
+                                         vaccine_coverage = vc,
+                                         vaccine_efficacy = 0.5,
+                                         vaccine_immunity_duration = 15,
+                                         exponential_decay = TRUE,
+                                         vaccine_efficacy_by_year = NULL)
+
+pop_risk <- pop - vacc_protected
+sum(pop_risk < 0)
+
+
+prop_high_risk  <- prop_basic_san
+prop_high_risk[, prop := 1 - prop]
+
+
+pars_data %>% 
+  filter(tolower(disease) == dis) %>% 
+  filter(definition == "relative risk of infection from at least basic sanition") %>%
+  select(value) %>% 
+  unlist() -> rr
+
+rr <- 1 / rr # make the relative risk for the high-risk group
+
+ir <- spread_age_IHME(ir_data)
+
+cases <- calculate_cases(population = pop, 
+                         country = cntry, 
+                         disease = dis,
+                         year_risk_ref = 2015,
+                         prop_high_risk = prop_high_risk, 
+                         incidence_rate = ir,
+                         risk_ratio = rr)
+pop[1:10,1]
+cases[1:10,1]
+head(pop)
+head(cases)
+
+
+dis_sev <- extract_param_tf(params_data = pars_data, str = str_dis_severity)
+dis_dur <- extract_param_tf(params_data = pars_data, str = str_dis_duration)
+dis_wt <- extract_param_tf(params_data = pars_data, str = str_dis_disability)
+
+yld <- calculate_YLD_tf(cases = cases,
+                        disability_weight = dis_wt,
+                        prob_severity = dis_sev,
+                        illness_duration = dis_dur)
+yld[1:10,1:20]
+
+
+ir_data$val[1:10]* sum(sev * wt * dur)
+yld_data$val[1:10]
+
+## age-specific incidence rate
+
+deaths <- spread_age_IHME(death_data)
+cfr <- deaths / ir
+
+yll <- calculate_YLL_tf(cases = cases,
+                        country = cntry,
+                        case_fatality = cfr)
+
+
+yll[1:10,"2015"]
+cases[1:10, "2015"] * cfr[1:10] * life_expectancy[1:10, "2015"] # 0 -9 y0
+
+ir[1:10] * cfr[1:10] * life_expectancy[1:10, "2015"] # 0 -9 y0
+yll_data[yll_data$age == "1 to 4",]$val
+yll_data[yll_data$age == "5 to 9",]$val
+yll_data[yll_data$age == "<1 year",]$val
+# it appears that life expectancy is lower for us compared to the IHME
+
+daly <- calculate_DALY_tf(country = cntry,
+                          cases = cases,
+                          disability_weight = wt,
+                          prob_severity = sev,
+                          illness_duration = dur, 
+                          case_fatality = cfr)
+daly[1:10, 1:10]
+yll[1:10, 1:10] + yld[1:10, 1:10]
+```
+
+## Population at risk
+### 1. Use open defecation as the risk indicator
+### 2. Use no access to improved water as the risk indicator
+### 3. Use no access to improved sanitation as the risk indicator
+```{r}
+
+```
+
+## Incidence rate and case fatality ratio
+Incidence rate estimates from IHME were downloaded from the website: 
+These country-level estimates were divided into two values of incidence in
+population who have access to the risk factor, which we defined above, and those
+who have not.  Then, since we have the estimates of the level of access to  
+```{r}
+ref_year <- 2015 # incidence rate in 2015 of IHME data
+incid_data_typhoid %>% 
+  filter.(measure == "Incidence", year == ref_year, country %in% cntry)  %>% 
+  spread_age_IHME -> ir
+
+```
+
+
+## Sampling parameters
+
+```{r}
+# Sampling based on Sobol low discrepancy sequence   
+test_countries
+nruns <- 5
+params_list <- set_params_tf(nruns = nruns,
+                              country = test_countries,
+                              parameter_data = pars_data,
+                              incidence_rate_data = incid_data_typhoid)
+
+# get country-level fixed parameters
+life_exp <- 
+  get_life_expectancy(life_expectancy_data = life_expectancy_data,
+                      country = cntry, year = yr)
+
+# fitting results on the proportion of population with access to basic sanitation
+prop_high_risk  <- prop_basic_san
+prop_high_risk[, prop := 1 - prop]
+  
+vi <- vaccine_impact_tf(disease = dis,
+                  country = cntry,
+                  population_data = population_data,
+                  vaccine_coverage_data = vacc_cov_data,
+                  vacc_scenario = "routine",
+                  year = 2000:2100,
+                  life_expectancy = life_exp,
+                  prop_high_risk = prop_high_risk,
+                  parameter_samples = params_list) 
+
+```
+
+## Simulation
+Some methods require disease and other don't. How do I streamline it?
+
+```{r}
+# generate parameter sets to explore
+# run vaccine impact
+devtools::load_all()
+set.seed(1234)
+nruns <- 30
+#VIMC report requires capital T in Typhoid
+dis <- "Typhoid"
+year <- "2000:2100"
+vaccination_scenarios <- c("novacc", "routine")
+tstamp <- format(Sys.time(), "%Y%m%d")
+# target countries
+template <- fread("inst/extdata/central-burden-template.202108test-1.Typhoid_IVI-Kim_standard.csv")
+target_countries <- clean_country_names(unique(template$country_name))
+# parameters to explore
+parameter_data <- fread("inst/extdata/parameters.csv")
+
+population_data <- as.data.frame(fread("outputs/population_wide.csv"))
+library(magrittr)
+parameter_data %<>% filter(tolower(disease) == tolower(dis))
+# life expectancy data
+life_expectancy_data <-
+  fread("inst/extdata/202110gavi-1_dds-201910_2_life_ex_both.csv")
+vaccine_coverage_data <- 
+  fread("inst/extdata/coverage_202108test-1_typhoid-routine-default.csv")
+
+# proportion of high-risk population data
+prop_high_risk_data <- prop_basic_san #internal model fit results
+prop_high_risk_data[, prop := 1 - prop]
+
+str_dis_severity <- c("Proportion of moderate typhoid fever",
+"Proportion of severe typhoid fever",
+"Proportion of severe typhoid fever with gastrointestinal bleeding",
+"Proportion of typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+
+str_dis_duration <- c("Duration of moderate typhoid fever",
+"Duration of severe typhoid fever",
+"Duration of severe typhoid fever with gastrointestinal bleeding",
+"Duration of  typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+
+str_dis_disability <- c("Disability weight for moderate typhoid fever",
+"Disability weight for severe typhoid fever",
+"Disability weight for severe typhoid fever with gastrointestinal bleeding",
+"Disability weight for severe typhoid fever with abdominal complications (other than gastrointestinal bleeding)")
+
+# Sampling based on Sobol low discrepancy sequence  
+params_list <- list()
+for (k in 1:length(target_countries)) {
+  cntry <- target_countries[[k]]
+  params_list[[k]] <- 
+    set_params_tf(nruns = nruns,
+                  country = cntry,
+                  parameter_data = parameter_data,
+                  incidence_rate_data = incid_data_typhoid)
+}
+t
+saveRDS(params_list, paste0("outputs/params_", dis, "_", tstamp, ".rds"))
+
+stoch_output <- list()
+stoch_parameters <- list()
+central_output <- list()
+
+# r <- 2
+# k = 1
+# i = 1
+for (r in seq_along(vaccination_scenarios)) {
+  vacc_scenario <- vaccination_scenarios[r]
+  for (k in seq_along(target_countries)) {
+    cntry <- target_countries[k]
+    cohort <- list()
+    cases <- list()
+    deaths <- list()
+    dalys <- list() 
+
+    life_exp <- 
+      get_life_expectancy(life_expectancy_data = life_expectancy_data,
+                          country = cntry,
+                          year = eval(parse(text = year)))
+    prop_high_risk <- 
+      prop_high_risk_data[prop_high_risk_data$country == cntry, ]
+    
+    message(paste0("vaccine scenario = ", vacc_scenario, ", country = ", cntry))
+    ## country-specific parameters
+    params <- params_list[[k]] # country by index
+    
+    for (i in 1:nruns) {
+      # message(paste0("r = ", r, ", k = ", k, ", i = ", i))
+      param_sample <- list()
+      param_sample$vacc_efficacy <- params[[3]]$vacc_efficacy[i]
+      param_sample$duration_vacc_protection <- 
+        params[[3]]$duration_vacc_protection[i]
+      param_sample$odd_ratio <- params[[3]]$odds_ratio[i]
+      param_sample$illness_duration <- 
+        c(params[[3]]$illness_duration_1[i],
+          params[[3]]$illness_duration_2[i],
+          params[[3]]$illness_duration_3[i],
+          params[[3]]$illness_duration_4[i])
+
+      param_sample$prob_severity <- 
+        c(params[[3]]$prob_severity_1[i],
+          params[[3]]$prob_severity_2[i],
+          params[[3]]$prob_severity_3[i],
+          params[[3]]$prob_severity_4[i])
+
+      param_sample$disability_weight <- 
+        c(params[[3]]$disability_weight_1[i],
+          params[[3]]$disability_weight_2[i],
+          params[[3]]$disability_weight_3[i],
+          params[[3]]$disability_weight_4[i])     
+
+      param_sample$incidence_rate <- params[[1]][, i]
+      param_sample$case_fatality_ratio <- params[[2]][, i]
+      
+      res <- vaccine_impact_tf(disease = dis,
+                               country = cntry,
+                               population_data = population_data,
+                               vaccine_coverage_data = vaccine_coverage_data,
+                               vacc_scenario = vacc_scenario,
+                               year = 2000:2100,
+                               life_expectancy = life_exp,
+                               prop_high_risk = prop_high_risk,
+                               parameter_sample = param_sample) 
+                        
+    
+      cohort[[i]] <- res$cohort_size
+      cases[[i]] <- res$cases
+      deaths[[i]] <- res$deaths
+      dalys[[i]] <- res$dalys 
+    }
+    
+    stoch <- list()
+    stoch$var <- c("cohort_size", "cases", "deaths", "dalys")
+    stoch$val[[1]] <- cohort[[1]] # cohort size remains constant across nruns
+    stoch$val[[2]] <- cases
+    stoch$val[[3]] <- deaths
+    stoch$val[[4]] <- dalys
+    
+    stoch_output[[k]] <- 
+      vimc_stoch_report(disease = dis, country = cntry, sim_output = stoch)
+    
+    # stoch_parameters[[k]] <- stoch_param
+    
+    names(stoch$val) <- stoch$var
+    central_output[[k]] <- vimc_central_report(disease = dis, country = cntry, 
+                               sim_output = stoch$val)
+  }
+  saveRDS(stoch_output, paste0("outputs/stoch_output_list_", tstamp, "_", dis, "_", vacc_scenario, ".rds"))
+   saveRDS(central_output, paste0("outputs/central_output_list_", tstamp, "_", dis, "_", vacc_scenario, ".rds"))
+}
+```
+
+
+## Combine results into a single file
+Results across countries given vaccination scenario (i.e., novacc, campaign, or
+routine) are in a list type. The do.call(rbind, x) is applied to make them a 
+single data.frame   
+```{r}
+disease <- c("typhoid")
+vacc_scenario <- c("novacc", "routine")
+tstamp <- "20210930"
+library(data.table)
+for(dis in disease) {
+  for (vacc in vacc_scenario) {
+    central <- list.files("outputs", pattern = paste0("central.*list.*", tstamp, ".*", dis, ".*", vacc, ".*rds$"), full.names = T)
+    res <- do.call(rbind, readRDS(central))
+    saveRDS(res, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".rds"))
+    fwrite(res, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".csv"))
+    
+    stoch_output <- list.files("outputs", pattern = paste0("stoch.*output.*list.*", tstamp, ".*", dis, ".*", vacc, ".*rds$"), full.names = T)
+    res_stoch <- do.call(rbind, readRDS(stoch_output))
+    saveRDS(res_stoch, paste0("outputs/stoch_output_", dis, "_", vacc, "_", tstamp, ".rds"))
+    fwrite(res_stoch, paste0("outputs/stoch_output_", dis, "_", vacc, "_", tstamp, ".csv"))
+    }
+}
+```
+
+## Diagnostic plots
+```{r}
+library(ggplot2)
+tstamp <- "20210930"
+for (cntry in target_countries) {
+  dis <- "typhoid"
+  vacc <- "routine"
+  # vacc <- "novacc"
+  # cntry <- "Iran, Islamic Republic of"
+  res <- readRDS(paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".rds"))
+  plt <- year_val_plot(disease = dis, country = cntry, sim_central_value = res)
+  # year_val_plot(disease = dis, country = cntry, sim_central_value = res, age = 10)
+  print(plt)
+  invisible(readline(prompt = "Press RET to continue"))
+} 
+```
+
+## Diagnostic plots II
+Visualize cohort size, cases, deaths, and dalys across vaccination scenarios for each of the countries over the period of 2000 - 2100
+```{r}
+library(ggplot2)
+library(grid)
+library(gridExtra)
+dis <- "typhoid"
+tstamp <- "20210930"
+for (cntry in target_countries){
+  res1 <- readRDS(paste0("outputs/central_",  dis, "_", "novacc_", tstamp, ".rds"))
+  res2 <- readRDS(paste0("outputs/central_",  dis, "_", "routine_", tstamp, ".rds"))
+  
+  p1 <- year_val_plot(disease = dis, country = cntry, sim_central_value = res1, vacc_scenario = "novacc")
+  p2 <- year_val_plot(disease = dis, country = cntry, sim_central_value = res2, vacc_scenario = "routine")
+
+  plt <- grid.arrange(p1, p2, ncol = 1)
+  print(plt)
+  invisible(readline(prompt = "Press RET to continue"))
+} 
+```
+
+## Diagnostic III
+1. Check if there are population categories (defined by chronological year and age) have negative numbers
+2. Check if cohort sizes are same across vaccination scenarios 
+3. Check if cases, deaths, and dalys are larger for non-vaccination scenarios compared to vaccination scenarios
+3. Check if cases, deaths, and dalys are larger for routine (or campaign) scenario compared to the 
+```{r}
+dis <- "typhoid"
+tstamp <- "20210930"
+for (cntry in target_countries){
+  res1 <- readRDS(paste0("outputs/central_",  dis, "_", "novacc_", tstamp, ".rds"))
+  res2 <- readRDS(paste0("outputs/central_",  dis, "_", "routine_", tstamp, ".rds"))
+  
+  if (sum(res1$cohort_size != res2$cohort_size) != 0) {
+    cat("Cohort size of novacc and routine scenrios are different for", cntry, "\n")
+  }
+  if (sum(res1$cases < res2$cases) != 0) {
+    cat("Cases are bigger for routine scenario than novacc scenrios for", cntry, "\n")    
+  }
+   if (sum(res1$deaths < res2$deaths) != 0) {
+    cat("Deaths are bigger for routine scenario than novacc scenrios for", cntry, "\n")    
+  }
+  if (sum(res1$dalys < res2$dalys) != 0) {
+    cat("DALYs are bigger for routine scenario than novacc scenrios for", cntry, "\n")
+  }
+}
+```
+
+## Prepare csv files for uploading the results onto Montagu
+```{r}
+library(data.table)
+dis <- "Typhoid"
+tstamp <- "20210930"
+
+for (vacc in c("novacc", "routine")) {
+  fl <- list.files("outputs/", pattern = paste0("central.*", dis, ".*", vacc, ".*", tstamp,  ".*rds$"), full.names = T)
+  d <- readRDS(fl)
+  fwrite(d, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".csv"))
+}
+
+# fls <- list.files("outputs", pattern = paste0("^param_combined.*", tstamp, ".*", dis, ".*", ".*rds$"), full.names = T)
+# x <- lapply(fls, function(x) readRDS(x))
+# d <- do.call(rbind, x)
+# fwrite(d, paste0("outputs/param_", dis, "_combined", tstamp, ".csv"))
+```
+
+
+## Combine parameters
+```{r}
+lst <- list()
+for (i in 1:length(target_countries)) {
+  params <- params_list[[i]]
+  
+  ir <- params[[1]]
+  t_ir <- data.table::transpose(ir)
+  colnames(t_ir) <- paste0("incid_rate_ag_", 0:100)
+  cfr <- params[[2]]
+  t_cfr <- data.table::transpose(cfr)
+  colnames(t_cfr) <- paste0("case_fatality_ratio_ag_", 0:100)
+  
+  lst[[i]] <- cbind(params[[3]], t_ir, t_cfr)
+}
+res <- do.call(rbind, lst)
+saveRDS(res, paste0("outputs/params_", dis, "_", tstamp, ".rds"))
+fwrite(res, paste0("outputs/params_", dis, "_", tstamp, ".csv"))
+```
+
+# Diagnostic IV: Negative population size
+Negative values can happen when there is population size for a certain age group
+is zero and in the previous year there are vaccinated people in one-year younger
+age group some value and model predicts some people move to the next age group,
+which is determined by the probability of dying and aging, vaccine  
+
+```{r}
+vacc_scenario <- c("novacc", "routine")
+tstamp <- "20210930"
+
+for (vacc in vacc_scenario) {
+  fl <- paste0("outputs/central_typhoid_", vacc, "_", tstamp, ".csv")
+  message(paste0("file = ", fl))
+  d <- fread(fl)
+  if(sum(d$cohort_size < 0) > 0){
+    message("Negative cohort size!")
+  }
+  if(sum(d$cases < 0) > 0){
+    message("Negative cases!")
+  }
+  if(sum(d$deaths < 0) > 0){
+    message("Negative deaths!")
+  }
+  if(sum(d$dalys < 0) > 0){
+    message("Negative dalys!")
+  }
+}
+```

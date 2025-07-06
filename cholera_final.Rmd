@@ -1,0 +1,898 @@
+---
+title: "Cholera final runs"
+author: "Jong-Hoon Kim"
+date: "9/14/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Load the package 
+
+## Packages
+```{r}
+library(data.table)
+library(devtools)
+library(usethis)
+library(tidyverse)
+```
+
+## Checklist
+1. Download the data set and familiarize yourself with the systesm
+2. Check if each function works for each data set provided
+  a. Country names may differ between different data sets
+  b. See if there are any missing values
+
+## Steps
+```{r setup, include=FALSE}
+# load package
+devtools::load_all()
+countries <- target_countries_cholera
+dis <- "cholera"
+
+cntry <- countries[1]
+pop <- setup_cohorts(country = cntry,
+                     year = eval(parse(text = "2000:2100")),
+                     population_data = population_data)
+
+pop_list <- lapply(countries, function(x) 
+  setup_cohorts(country = x, year = eval(parse(text = "2000:2100")),
+                population_data = population_data))
+
+# coverage_202110gavi-2_cholera-no-vaccination.csv
+# coverage_202110gavi-2_cholera-campaign-default.csv
+# vacc_cov_data <- 
+#   fread("inst/extdata/coverage_202110gavi-2_cholera-campaign-default.csv")
+# vacc_cov_data$country <- clean_country_names(vacc_cov_data$country)
+
+vacc_cov_data <- vacc_cov_input_cholera
+vc <- create_vaccine_coverage(country = cntry,
+                        population = pop,
+                        vaccine_coverage_data = vacc_cov_data)
+vc_list <- list()
+for (i in 1:length(countries)) {
+  vc_list[[i]] <- create_vaccine_coverage(country = countries[[i]],
+                        population = pop_list[[i]],
+                        vaccine_coverage_data = vacc_cov_data)
+}
+nruns <- 30
+params <- set_params_cholera(disease = dis,
+                          nruns = nruns,
+                          country = cntry,
+                          parameter_data = parameter_data_cholera,
+                          incidence_rate_data = overall_incid_rate_cholera,
+                          case_fatality_ratio_data = cfr_data_cholera)
+
+i <- 1
+
+vacc_eff_by_year <- unlist(params[i, paste0("vacc_eff_year_", 0:6)])
+vacc_protected <- 
+  calculate_vaccine_protected(disease = dis,
+                              country = cntry,
+                              population = pop,
+                              year = 2000:2100,
+                              vaccine_coverage = vc,
+                              exponential_decay = FALSE,
+                              vaccine_efficacy_by_year = vacc_eff_by_year)
+
+vacc_protect_list <- list()
+for (i in 1:length(countries)) {
+  cat("i =", i ,", country =", countries[[i]], "\n")
+  vacc_protect_list[[i]] <-  calculate_vaccine_protected(disease = dis,
+                              country = countries[[i]],
+                              population = pop_list[[i]],
+                              year = 2000:2100,
+                              vaccine_coverage = vc_list[[i]],
+                              exponential_decay = FALSE,
+                              vaccine_efficacy_by_year = vacc_eff_by_year)
+}
+
+## population is now 
+pop_unprotected <- pop - vacc_protected
+sum(pop_unprotected < 0)
+
+# sample an incidence rate
+overall_incid_rate_cholera %>% 
+  filter(country == cntry) -> ir
+
+# lnorm_par <- calc_lognorm_pars(mean = ir_par$ir_sim, sd = ir_par$ir_sim_sd)
+# 
+# set.seed(1)
+# overall_ir <- rlnorm(1, lnorm_par$mu, lnorm_par$sigma)  
+  
+# overall_ir_dat %>%
+#   filter(country == cntry) %>%
+#   select(min, max) %>% unlist() -> ir_val
+
+set.seed(1)
+overall_ir <- runif(1, min = 0, max = 1)
+overall_ir_tr <- qlnorm(overall_ir , meanlog = ir$meanlog, sdlog = ir$sdlog)
+  
+incid_rate_adj <- data.frame(matrix(NA, ncol = 101))
+names(incid_rate_adj) <- c(as.character(2000:2100))
+
+wash_prop %>% filter(country == cntry) -> wash_prop_country
+
+# risk_vars <- wash_risk_ratio$var
+# [1] "at_least_basic_sanitation" "at_least_basic_water"     
+# [3] "basic_hygiene"             "no_open_defecation"       
+# [5] "no_surface_water"          "no_unimproved_sanitation" 
+# [7] "no_unimproved_water"       "safely_managed_water" 
+# 8 risk variables, but the first two risk variables were omitted because
+# relevant variables from the case-control studies were not identified.
+
+# remove columns with NAs
+
+risk_vars <-
+  names(wash_prop_country[,5:10])[!is.na(colSums(wash_prop_country[,5:10]))]
+
+ir_adj <- 
+  data.frame(matrix(NA, nrow = length(risk_vars), ncol = 101 + 1))
+names(ir_adj) <- c("WASH_var", as.character(2000:2100))
+ir_adj$WASH_var <- risk_vars
+
+ref_year <- 2010
+rv <- risk_vars[1]
+
+wash_prop %>%
+  filter(country == cntry, year == ref_year) %>%
+  pull(rv) -> prop_low_risk_ref
+
+wash_risk_ratio %>%
+  filter(var == rv) %>%
+  pull(risk_ratio) -> rr
+
+ir_high <- overall_ir / (prop_low_risk_ref * rr + (1 - prop_low_risk_ref))
+ir_low <- ir_high * rr
+
+prop_low_risk <-
+    wash_prop %>%
+    filter(country == cntry) %>%
+    pull(rv)
+
+ir_adj[ir_adj$WASH_var == rv, 2:102] <-
+        ir_high * (1 - prop_low_risk) +
+        ir_low * prop_low_risk
+
+for (rv in risk_vars) {
+  ir_by_risk <- calc_incid_rate_by_risk(country = cntry,
+                                        overall_ir = overall_ir,
+                                        wash_risk_ratio = wash_risk_ratio,
+                                        wash_prop = wash_prop,
+                                        ref_year = 2010,
+                                        risk_var = rv)
+      # cat("country =", cntry, ", risk variable =", rv, "\n")
+      # extract predicted proportion of low-risk people over 2000-2100
+      wash_prop %>% 
+        filter(country == cntry) %>%
+        pull(rv) -> prop_low_risk
+
+      ir_adj[ir_adj$WASH_var == rv, 2:102] <-
+        ir_by_risk$ir_high * (1 - prop_low_risk) +
+        ir_by_risk$ir_low * prop_low_risk
+      # cat("ir =", ir_ref$ir_high, ir_ref$ir_low, "\n")
+}
+
+incid_rate_adj[1, ] <- apply(ir_adj[, 2:102], 2, mean, na.rm = TRUE)
+for (r in 2:101) {
+    incid_rate_adj[r, ] <- incid_rate_adj[1, ]
+}
+
+incid_rate_adj <- calc_incid_rate_risk_adj_chol(country = cntry,
+                              overall_ir = overall_ir,
+                              wash_risk_ratio = wash_risk_ratio,
+                              wash_prop = wash_prop, 
+                              ref_year = 2010)
+  
+incid_rate_adj_list <- list()
+for (i in 1:length(countries)) {
+  cat("i =", i ,", country =", countries[[i]], "\n")
+  incid_rate_adj_list[[i]] <- calc_incid_rate_risk_adj_chol(country = countries[[i]],
+                              overall_ir = overall_ir,
+                              wash_risk_ratio = wash_risk_ratio,
+                              wash_prop = wash_prop, 
+                              ref_year = 2010)
+}
+
+## calculate_cases_tf can be used for cholera as well
+# ir_adj <- incid_rate_adj_list[[1]]
+ir_adj <- incid_rate_adj
+cases <- calculate_cases(country = cntry,
+                         population = pop_unprotected,
+                         year = 2000:2100,
+                         incidence_rate = ir_adj)
+
+pop[1:10,1]
+cases[1:10,1]
+head(pop)
+head(cases)
+
+parameter
+
+```
+
+## Parameter sampling
+```{r}
+devtools::load_all()
+disease <- "Cholera"
+nruns <- 30
+country <- target_countries_cholera[1]
+
+params <- set_params_cholera(disease = disease,
+                          nruns = nruns,
+                          country = country,
+                          parameter_data = parameter_data_cholera,
+                          incidence_rate_data = overall_incid_rate_cholera,
+                          case_fatality_ratio_data = cfr_data_cholera)
+
+life_expectancy <- 
+  get_life_expectancy(life_expectancy_data = life_expectancy,
+                      country = country,
+                      year = 2000:2100)
+
+vacc_scenario <- "campaign"
+i <- 1
+parameter_sample <- params[i,]
+vaccine_coverage_data <- vacc_cov_input_cholera
+
+vacc_impact <- vaccine_impact_cholera(disease = disease,
+                       country = country,
+                       population_data = population_data,
+                       wash_prop = wash_prop,
+                       wash_risk_ratio = wash_risk_ratio,
+                       vaccine_coverage_data = vacc_cov_input_cholera,
+                       vacc_scenario = vacc_scenario,
+                       year = 2000:2100,
+                       life_expectancy = life_expectancy,
+                       parameter_sample = parameter_sample)
+
+```
+
+## Check vaccine protected
+
+```{r}
+cntry <- "Bangladesh"
+yr <- 2000:2100
+vaccine_coverage_data <- vacc_cov_input_cholera
+dis <- "Cholera"
+
+pop <- setup_cohorts(country = cntry,
+                     year = yr,
+                     population_data = population_data)
+  #
+vacc_cov <-
+      create_vaccine_coverage(country = cntry,
+                              population = pop,
+                              vaccine_coverage_data = vaccine_coverage_data)
+colSums(vacc_cov)    
+
+params_list <- readRDS("outputs/params_Cholera_20211220T130658.rds")
+params <- params_list[[which(target_countries_cholera == "Bangladesh")]]
+parameter_sample <- params[1,]
+
+vacc_eff_by_year <- unlist(parameter_sample[paste0("vacc_eff_year_", 0:6)])
+    #
+vacc_protected <-
+  calculate_vaccine_protected(disease = dis,
+                              country = cntry,
+                              population = pop,
+                              vaccine_coverage = vacc_cov,
+                              vaccine_efficacy = NULL,
+                              vaccine_immunity_duration = NULL,
+                              exponential_decay = FALSE,
+                              vaccine_efficacy_by_year = vacc_eff_by_year)
+colSums(vacc_protected)
+vacc_recipients <-
+  calculate_vaccine_protected(disease = dis,
+                              country = cntry,
+                              population = pop,
+                              vaccine_coverage = vacc_cov,
+                              vaccine_efficacy = 1.0,
+                              vaccine_immunity_duration = 1000,
+                              exponential_decay = TRUE,
+                              vaccine_efficacy_by_year = NULL)
+
+
+colSums(vacc_recipients)
+pop_unprotected <- pop
+# factor protection for vaccine recipients
+pop_unprotected <- pop_unprotected - vacc_protected
+# vaccine coverage used to switch on/off indirect effect
+pop_unvacc <- pop - vacc_recipients
+vacc_cov_year <-
+  calc_vacc_cov_year(pop = pop, vacc_recipients = vacc_recipients)
+
+  calc_indirect_vacc_protected_cholera(population = pop_unvacc,
+                                       vacc_cov = vacc_cov_year)
+colSums(vacc_recipients)
+pop_unprotected <- pop_unprotected - indirect_vacc_protected
+all.equal(colSums(pop)[1:21], colSums(pop_unprotected)[1:21])
+```
+
+
+### Create parameters list
+```{r}
+set.seed(1234)
+params_list <- list()
+nruns <- 200
+dis <- "Cholera"
+tstamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+for (k in seq_along(target_countries_cholera)) {
+  cntry <- target_countries_cholera[[k]]
+  params_list[[k]] <-
+    set_params_cholera(disease = dis,
+                  nruns = nruns,
+                  country = cntry,
+                  parameter_data = parameter_data_cholera,
+                  incidence_rate_data = overall_incid_rate_cholera,
+                  case_fatality_ratio_data = cfr_data_cholera)
+}
+saveRDS(params_list, paste0("outputs/params_", dis, "_", tstamp, ".rds"))
+```
+
+## Simulation using simulate_cholera
+```{r}
+devtools::load_all()
+params_list <- readRDS("outputs/params_Cholera_20211220T130658.rds")
+
+# vacc_scenarios <- c("novacc", "campaign")
+# vacc_scenarios <- c("novacc")
+vacc_scenarios <- c("campaign")
+tic <- Sys.time()
+for (vs in vacc_scenarios){
+  tstamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+  dis <- "Cholera"
+  sim <- simulate_cholera(country = target_countries_cholera,
+                          params_list = params_list,
+                          vacc_scenario = vs,
+                          vacc_cov_data = vacc_cov_input_cholera,
+                          life_expectancy_data = life_expectancy_data,
+                          wash_prop = wash_prop,
+                          wash_risk_ratio = wash_risk_ratio_cholera,
+                          nruns = 200)
+  
+  message(paste0(Sys.time() - tic, " elapsed"))
+  
+  saveRDS(sim$stoch, paste0("outputs/stoch_output_list_", 
+                 tstamp, "_", dis, "_", vs, ".rds"))
+  saveRDS(sim$central, paste0("outputs/central_output_list_",
+                 tstamp, "_", dis, "_", vs, ".rds"))
+}
+```
+
+
+## Compare vaccine_impact vs. vaccine_impact_cholera
+The difference comes from random numbers are different 
+```{r}
+# old version
+cntry <- target_countries_cholera[1]
+year_chr <- "2000:2100"
+nruns <- 30
+vacc_scenario <- "novacc"
+
+cohort <- list()
+cases <- list()
+deaths <- list()
+dalys <- list() 
+
+life_exp <- 
+  get_life_expectancy(life_expectancy_data = life_expectancy_data,
+                      country = cntry,
+                      year = eval(parse(text = year_chr)))
+
+## country-specific parameters
+params_list <- readRDS("outputs/params_Cholera_20211125T0734.rds")
+params <- params_list[[1]] # country by index
+for (i in 1:nruns) {
+  res <- vaccine_impact(
+      disease = dis,
+      country = cntry,
+      population = population_data,
+      wash_prop = wash_prop,
+      wash_risk_ratio = wash_risk_ratio_chol,
+      vacc_scenario = vacc_scenario,
+      vaccine_coverage = vacc_cov_input_cholera,
+      year = eval(parse(text = year_chr)),
+      life_expectancy = life_exp,
+      incidence_rate = params$incidence_rate[i],
+      disability_weight = params$disability_weight[i],
+      case_fatality = params$case_fatality_ratio[i],
+      illness_duration = 5/365, 
+      vaccine_immunity_duration = NULL,
+      exponential_decay = FALSE,
+      vaccine_efficacy = params$ve_yr0[i],
+      vaccine_efficacy_by_year = c(
+        params$ve_yr0[i],
+        params$ve_yr1[i],
+        params$ve_yr2[i],
+        params$ve_yr3[i],
+        params$ve_yr4[i],
+        params$ve_yr5[i],
+        params$ve_yr6[i]))
+  
+  cohort[[i]] <- res$cohort_size
+  cases[[i]] <- res$cases
+  deaths[[i]] <- res$deaths
+  dalys[[i]] <- res$dalys 
+}
+cases_sum <- Reduce('+', cases)
+cases_sum_col <- colSums(cases_sum)
+plot(2000:2100, cases_sum_col/nruns, type="l")
+max(cases_sum_col/nruns)
+
+
+# new version
+cohort <- list()
+cases <- list()
+deaths <- list()
+dalys <- list()
+life_exp <-
+  get_life_expectancy(life_expectancy_data = life_expectancy_data,
+                      country = cntry,
+                      year = eval(parse(text = year_chr)))
+
+params_list <- readRDS("outputs/params_Cholera_20211220T130658.rds")
+params <- params_list[[1]] # country by index
+#params_list_old <- readRDS("outputs/params_Cholera_20211125T0734.rds")
+# params_old <- params_list_old[[1]] # country by index
+# params$incidence_rate[1:30] <- params_old$incidence_rate
+for (i in 1:nruns) {
+  res <- vaccine_impact_cholera(disease = dis,
+                           country = cntry,
+                           population_data = population_data,
+                           wash_prop = wash_prop,
+                           wash_risk_ratio = wash_risk_ratio_cholera,
+                           vaccine_coverage_data = vacc_cov_input_cholera,
+                           vacc_scenario = vacc_scenario,
+                           year = eval(parse(text = year_chr)),
+                           life_expectancy = life_exp,
+                           parameter_sample = params[i,])
+
+  cohort[[i]] <- res$cohort_size
+  cases[[i]] <- res$cases
+  deaths[[i]] <- res$deaths
+  dalys[[i]] <- res$dalys
+}
+cases_sum <- Reduce('+', cases)
+cases_sum_col <- colSums(cases_sum)
+plot(2000:2100, cases_sum_col/nruns, type="l")
+max(cases_sum_col/nruns)
+summary(cases_sum_col/nruns)
+```
+
+
+## Simulation
+Some methods require disease and other don't. How do I streamline it?
+```{r}
+# Check lists
+# Are country names consistent across data sets?
+# mean, min, mix functions na.rm = TRUE argument necessary?
+# generate parameter sets to explore
+# run vaccine impact
+devtools::load_all()
+set.seed(1234)
+nruns <- 30
+#VIMC report requires capital T in Typhoid
+dis <- "Cholera"
+year_chr <- "2000:2100"
+vaccination_scenarios <- c("novacc", "campaign")
+vaccination_scenarios_save <- c("novacc", "campaign")
+
+tstamp <- format(Sys.time(), "%Y%m%dT%H%M")
+# # target countries
+# template <- 
+#   fread("inst/extdata/central-burden-template.202110gavi-2.Cholera_IVI-Kim_standard.csv")
+# countries <- clean_country_names(unique(template$country_name))
+countries <- target_countries_cholera
+# parameters to explore
+# library(magrittr)
+parameter_data <- parameters %>% filter(tolower(disease) == tolower(dis))
+
+# Sampling based on Sobol low discrepancy sequence
+params_list <- list()
+for (k in 1:length(countries)) {
+  cntry <- countries[[k]]
+  params_list[[k]] <-
+    set_parameter_cholera(disease = dis,
+                          nruns = nruns,
+                          country = cntry,
+                          parameter_data = parameter_data,
+                          incidence_rate_data = overall_incid_rate_cholera,
+                          case_fatality_ratio_data = cfr_data)
+}
+
+saveRDS(params_list, paste0("outputs/params_", dis, "_", tstamp, ".rds"))
+params_list <- readRDS(paste0("outputs/params_", dis, "_", tstamp, ".rds"))
+
+params_list <- readRDS("outputs/params_Cholera_20211125T0734.rds")
+
+stoch_output <- list()
+stoch_parameters <- list()
+central_output <- list()
+
+# one vaccine coverage input
+# coverage_202110gavi-2_cholera-no-vaccination.csv
+# coverage_202110gavi-2_cholera-campaign-default.csv
+# vacc_cov_input_campaign <- 
+#   fread("inst/extdata/coverage_202110gavi-2_cholera-campaign-default.csv")
+# vacc_cov_input_campaign$country <- clean_country_names(vacc_cov_input_campaign$country)
+
+vacc_cov_input <- list()
+vacc_cov_input[[1]] <- vacc_cov_input_cholera
+
+## arrange vacc_scenarios according to the vaccination scenarios
+vacc_cov_data <- vacc_cov_input[[1]]
+
+# r = 2
+# k = 1
+# for (r in seq_along(vaccination_scenarios)) {
+for (r in 1:1) {
+  vacc_scenario <- vaccination_scenarios[r]
+  vacc_scenario_save <- vaccination_scenarios_save[r]
+  if (r > 1) {
+    vacc_cov_data <- vacc_cov_input[[r - 1]]
+  }
+  for (k in seq_along(countries)) {
+    cntry <- countries[k]
+    cohort <- list()
+    cases <- list()
+    deaths <- list()
+    dalys <- list() 
+
+    life_exp <- 
+      get_life_expectancy(life_expectancy_data = life_expectancy_data,
+                          country = cntry,
+                          year = eval(parse(text = year_chr)))
+    
+    message(paste0("vaccine scenario = ", 
+                   vacc_scenario, ", country = ", cntry, 
+                   ", ", k, "/", length(countries)))
+    ## country-specific parameters
+    params <- params_list[[k]] # country by index
+    # i = 1
+    for (i in 1:nruns) {
+      # message(paste0("r = ", r, ", k = ", k, ", i = ", i))
+
+      res <- vaccine_impact(
+          disease = dis,
+          country = cntry,
+          population = population_data,
+          wash_prop = wash_prop,
+          wash_risk_ratio = wash_risk_ratio_chol,
+          vacc_scenario = vacc_scenario,
+          vaccine_coverage = vacc_cov_data,
+          year = eval(parse(text = year_chr)),
+          life_expectancy = life_exp,
+          incidence_rate = params$incidence_rate[i],
+          disability_weight = params$disability_weight[i],
+          case_fatality = params$case_fatality_ratio[i],
+          illness_duration = 5/365, 
+          vaccine_immunity_duration = NULL,
+          exponential_decay = FALSE,
+          vaccine_efficacy = params$ve_yr0[i],
+          vaccine_efficacy_by_year = c(
+            params$ve_yr0[i],
+            params$ve_yr1[i],
+            params$ve_yr2[i],
+            params$ve_yr3[i],
+            params$ve_yr4[i],
+            params$ve_yr5[i],
+            params$ve_yr6[i]))
+      
+      cohort[[i]] <- res$cohort_size
+      cases[[i]] <- res$cases
+      deaths[[i]] <- res$deaths
+      dalys[[i]] <- res$dalys 
+    }
+    
+    stoch <- list()
+    stoch$var <- c("cohort_size", "cases", "deaths", "dalys")
+    stoch$val[[1]] <- cohort[[1]] # cohort size remains constant across nruns
+    stoch$val[[2]] <- cases
+    stoch$val[[3]] <- deaths
+    stoch$val[[4]] <- dalys
+    
+    stoch_output[[k]] <- 
+      vimc_stoch_report(disease = dis, country = cntry, sim_output = stoch)
+    
+    # stoch_parameters[[k]] <- stoch_param
+    
+    names(stoch$val) <- stoch$var
+    central_output[[k]] <- vimc_central_report(disease = dis, country = cntry, 
+                               sim_output = stoch$val)
+  }
+  saveRDS(stoch_output, paste0("outputs/stoch_output_list_", tstamp, "_", dis, "_", vacc_scenario_save, ".rds"))
+   saveRDS(central_output, paste0("outputs/central_output_list_", tstamp, "_", dis, "_", vacc_scenario_save, ".rds"))
+}
+```
+
+
+## Combine results in list into a single data.frame
+Results across countries given vaccination scenario (i.e., novacc, campaign, or
+routine) are in a list type. The do.call(rbind, x) is applied to make them a 
+single data.frame   
+
+### Manual single file conversion 
+```{r}
+# data in which results from each country is stored in a list
+res_list <- 
+  readRDS("outputs/central_output_list_20211222T212131_Cholera_campaign.rds")
+
+# bind each element of the list by row
+res <- do.call(rbind, res_list)
+dis <- "Cholera" 
+tstamp <- "20211222T212131"
+# vacc <- c("novacc")
+vacc <- c("campaign")
+
+saveRDS(res, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".rds"))
+fwrite(res, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".csv"))
+```
+
+### Auto-conversion across vaccination scenarios
+```{r}
+disease <- c("Cholera")
+vacc_scenario <- c("novacc", "campaign")
+tstamp <- "20211221T00"
+library(data.table)
+# vacc <- vacc_scenario[2]
+for(dis in disease) {
+  for (vacc in vacc_scenario) {
+    # central <- list.files("outputs", pattern = paste0("central.*list.*", tstamp, ".*", dis, ".*", vacc, ".*rds$"), full.names = T)
+    # ## bind by row from a list of data with the same format
+    # res <- do.call(rbind, readRDS(central))
+    # saveRDS(res, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".rds"))
+    # fwrite(res, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".csv"))
+    
+    stoch_output <- list.files("outputs", pattern = paste0("stoch.*output.*list.*", tstamp, ".*", dis, ".*", vacc, ".*rds$"), full.names = T)
+    res_stoch <- do.call(rbind, readRDS(stoch_output))
+    saveRDS(res_stoch, paste0("outputs/stoch_", dis, "_", vacc, "_", tstamp, ".rds"))
+    fwrite(res_stoch, paste0("outputs/stoch_", dis, "_", vacc, "_", tstamp, ".csv"))
+    }
+}
+```
+
+
+### Effective vaccine coverage
+```{r}
+dis <- "Cholera"
+
+cntry <- target_countries_cholera[1]
+for( cntry in target_countries_cholera) {
+  pop <- setup_cohorts(country = cntry,
+                       year = 2000:2100,
+                       population_data = population_data)
+  vacc_cov <-
+    create_vaccine_coverage(country = cntry,
+                            population = pop,
+                            vaccine_coverage_data = vacc_cov_input_cholera)
+  
+  params_list <- readRDS("outputs/params_Cholera_20211220T130658.rds")
+  parameter_sample <- params_list[[1]] # country by index
+  
+  vacc_eff_by_year <- unlist(parameter_sample[paste0("vacc_eff_year_", 0:6)])
+      
+  vacc_protected <-
+    calculate_vaccine_protected(disease = dis,
+                                country = cntry,
+                                population = pop,
+                                vaccine_coverage = vacc_cov,
+                                vaccine_efficacy = NULL,
+                                vaccine_immunity_duration = NULL,
+                                exponential_decay = FALSE,
+                                vaccine_efficacy_by_year = vacc_eff_by_year)
+  vacc_recipients <-
+    calculate_vaccine_protected(disease = dis,
+                              country = cntry,
+                              population = pop,
+                              vaccine_coverage = vacc_cov,
+                              vaccine_efficacy = 1.0,
+                              vaccine_immunity_duration = 1000,
+                              exponential_decay = TRUE,
+                              vaccine_efficacy_by_year = NULL)
+  
+  pop_unprotected <- pop
+  # factor protection for vaccine recipients
+  pop_unprotected <- pop_unprotected - vacc_protected
+  pop_unvacc <- pop - vacc_recipients
+      # effective vaccine coverage used to switch on/off indirect effect
+  eff_vacc_cov_year <-
+    calc_vacc_cov_year(pop = pop, vacc_recipients = vacc_protected)
+  
+  vacc_cov_year <-
+    calc_vacc_cov_year(pop = pop, vacc_recipients = vacc_recipients)
+  
+  IVE <- calc_indirect_vacc_protected_cholera(population = pop_unvacc, eff_vacc_cov = eff_vacc_cov_year) 
+  propIVE <- colSums(IVE) / colSums(pop)
+  plot(propIVE, type="l", main=cntry, ylim=c(0, 1))
+  lines(eff_vacc_cov_year, col=2)
+  lines(vacc_cov_year, col=3)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+```
+
+### Compare w/ and w/o indirect effects (edit)
+```{r}
+# sim1 <- readRDS("outputs/central_Cholera_campaign_20211220T175515.rds")
+sim1 <- readRDS("outputs/central_Cholera_campaign_20211221T004050.rds")
+sim2 <- readRDS("outputs/central_Cholera_campaign_20211222T212131.rds")
+
+# cntry = target_countries_tf[1]
+dis = "Cholera"
+
+library(ggplot2)
+library(gridExtra)
+for (cntry in target_countries_cholera){
+  plt1 <- year_val_plot(disease = dis, country = cntry, 
+                        sim_central_value = sim1)
+  plt2 <- year_val_plot(disease = dis, country = cntry, 
+                        sim_central_value = sim2)
+  grid.arrange(plt1, plt2, nrow=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+```
+
+## Check values
+```{r}
+cntry <- "Afghanistan"
+for (cntry in target_countries_cholera){
+  message(cntry)
+  sim1 %>%
+      filter(country_name == cntry) %>%
+      group_by(year) %>%
+      summarize(cohort_size = sum(cohort_size),
+                cases = sum(cases),
+                deaths = sum(deaths),
+                dalys = sum(dalys))
+    invisible(readline(prompt = "Press RET to continue")) }
+```
+
+## Diagnostic plots
+```{r}
+library(ggplot2)
+# tstamp <- "20211220T134753"
+# tstamp <- "20211125"
+tstamp <- "20211220T185451"
+# central_Cholera_novacc_20211220T185451.rds
+# central_Cholera_novacc_20211125.rds
+for (cntry in target_countries_cholera) {
+  for(tstamp in c("20211125", "20211220T185451")) {
+    dis <- "Cholera"
+    vacc <- "novacc"
+    # cntry <- "Iran, Islamic Republic of"
+    res <- readRDS(paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".rds"))
+    plt <- year_val_plot(disease = dis, country = cntry, sim_central_value = res)
+    # year_val_plot(disease = dis, country = cntry, sim_central_value = res, age = 10)
+    print(plt)
+    invisible(readline(prompt = "Press RET to continue"))
+  } 
+}
+```
+
+## Diagnostic plots II
+Visualize cohort size, cases, deaths, and dalys across vaccination scenarios for each of the countries over the period of 2000 - 2100
+```{r}
+library(ggplot2)
+library(grid)
+library(gridExtra)
+dis <- "Cholera"
+tstamp <- "20211125"
+for (cntry in countries){
+  res1 <- readRDS(paste0("outputs/central_",  dis, "_", "novacc_", tstamp, ".rds"))
+  res2 <- readRDS(paste0("outputs/central_",  dis, "_", "campaign_", tstamp, ".rds"))
+  
+  p1 <- year_val_plot(disease = dis, country = cntry, sim_central_value = res1, vacc_scenario = "novacc")
+  p2 <- year_val_plot(disease = dis, country = cntry, sim_central_value = res2, vacc_scenario = "campaign")
+
+  plt <- grid.arrange(p1, p2, ncol = 1)
+  print(plt)
+  invisible(readline(prompt = "Press RET to continue"))
+} 
+```
+
+## Diagnostic III
+1. Check if there are population categories (defined by chronological year and age) have negative numbers
+2. Check if cohort sizes are same across vaccination scenarios 
+3. Check if cases, deaths, and dalys are larger for non-vaccination scenarios compared to vaccination scenarios
+3. Check if cases, deaths, and dalys are larger for routine (or campaign) scenario compared to the 
+```{r}
+dis <- "Cholera"
+tstamp <- "20211125"
+for (cntry in countries){
+  res1 <- readRDS(paste0("outputs/central_",  dis, "_", "novacc_", tstamp, ".rds"))
+  res2 <- readRDS(paste0("outputs/central_",  dis, "_", "campaign_", tstamp, ".rds"))
+  
+  if (sum(res1$cohort_size != res2$cohort_size) != 0) {
+    cat("Cohort size of novacc and routine scenrios are different for", cntry, "\n")
+  }
+  if (sum(res1$cases < res2$cases) != 0) {
+    cat("Cases are bigger for routine scenario than novacc scenrios for", cntry, "\n")    
+  }
+   if (sum(res1$deaths < res2$deaths) != 0) {
+    cat("Deaths are bigger for routine scenario than novacc scenrios for", cntry, "\n")    
+  }
+  if (sum(res1$dalys < res2$dalys) != 0) {
+    cat("DALYs are bigger for routine scenario than novacc scenrios for", cntry, "\n")
+  }
+}
+```
+
+# Diagnostic IV: Negative population size
+Negative values can happen when there is population size for a certain age group
+is zero and in the previous year there are vaccinated people in one-year younger
+age group some value and model predicts some people move to the next age group,
+which is determined by the probability of dying and aging, vaccine  
+
+```{r}
+# vacc_scenario <- c("novacc", "campaign")
+vacc_scenario <- c("campaign")
+tstamp <- "20211221T004050"
+
+for (vacc in vacc_scenario) {
+  fl <- paste0("outputs/central_Cholera_", vacc, "_", tstamp, ".csv")
+  message(paste0("file = ", fl))
+  d <- fread(fl)
+  if(sum(d$cohort_size < 0) > 0){
+    message("Negative cohort size!")
+  }
+  if(sum(d$cases < 0) > 0){
+    message("Negative cases!")
+  }
+  if(sum(d$deaths < 0) > 0){
+    message("Negative deaths!")
+  }
+  if(sum(d$dalys < 0) > 0){
+    message("Negative dalys!")
+  }
+}
+```
+
+## Prepare csv files for uploading the results onto Montagu
+```{r}
+library(data.table)
+dis <- "Cholera"
+tstamp <- "20211125"
+
+for (vacc in c("novacc", "campaign")) {
+  fl <- list.files("outputs/", pattern = paste0("central.*", dis, ".*", vacc, ".*", tstamp,  ".*rds$"), full.names = T)
+  d <- readRDS(fl)
+  fwrite(d, paste0("outputs/central_", dis, "_", vacc, "_", tstamp, ".csv"))
+}
+
+# fls <- list.files("outputs", pattern = paste0("^param_combined.*", tstamp, ".*", dis, ".*", ".*rds$"), full.names = T)
+# x <- lapply(fls, function(x) readRDS(x))
+# d <- do.call(rbind, x)
+# fwrite(d, paste0("outputs/param_", dis, "_combined", tstamp, ".csv"))
+```
+
+
+## Combine parameters
+```{r}
+params_list <- readRDS("outputs/params_Cholera_20211220T130658.rds")
+# modify the list to 
+# lst <- list()
+# for (i in 1:length(target_countries)) {
+#   params <- params_list[[i]]
+#     ir <- params[[1]]
+#   t_ir <- data.table::transpose(ir)
+#   colnames(t_ir) <- paste0("incid_rate_ag_", 0:100)
+#   cfr <- params[[2]]
+#   t_cfr <- data.table::transpose(cfr)
+#   colnames(t_cfr) <- paste0("case_fatality_ratio_ag_", 0:100)
+#   lst[[i]] <- cbind(params[[3]], t_ir, t_cfr)
+# }
+# res <- do.call(rbind, lst)
+
+res <- do.call(rbind, params_list)
+# run_id has to be the first column and therefore, files are edited, 
+# set_params_cholera was also adjusted and therefore will not be necceary for 
+# future runs
+res$disease <- "Cholera"
+dis <- "Cholera"
+res <- res[, c(2, 18, 1, 3:17)]
+names(res)
+tstamp <- "20211221T00" # use the same time stamp as the simulation results
+saveRDS(res, paste0("outputs/params_", dis, "_", tstamp, ".rds"))
+fwrite(res, paste0("outputs/params_", dis, "_", tstamp, ".csv"))
+```
+

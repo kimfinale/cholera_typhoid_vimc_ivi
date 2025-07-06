@@ -1,0 +1,1023 @@
+---
+title: "Typhoid full model runs"
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = '', fig.width = 6, fig.height = 6)
+## document the function
+devtools::load_all(".")
+devtools::document()
+```
+
+
+## Save data
+### Make country names consitent accorss dataset using clean country names function
+### First read the data in csv format from inst/extdata/ and and execute d[country := clean_country_names(country)]
+
+```{r}
+library(data.table)
+library(devtools)
+library(usethis)
+library(tidyverse)
+
+# incidence_rate <- fread("inst/extdata/incidence_rate.csv")
+# incidence_rate[, country := clean_country_names(country)]
+# incidence_rate["country"] <- lapply(incidence_rate["country"], function(x) clean_country_names(x))
+# add cholera data
+# cholera_ir <- fread("data/cholera_incidence.csv")
+# cholera_ir$Country <- clean_country_names(cholera_ir$Country)
+# names(cholera_ir) <- c("disease", "country", "incidence_rate_100Kpyo") # to match the names of incidence_rate
+#
+# ir_ty <- incidence_rate[disease == "typhoid", c("disease", "country", "incidence_rate_100Kpyo")]
+# incidence_rate <- rbind(ir_ty, cholera_ir)
+# incidence_rate[disease == "typhoid", disease := "Typhoid"]
+# incidence_rate$country <- clean_country_names(incidence_rate$country)
+
+# incidence_rate[, country := clean_country_names(country)]
+# use_data(incidence_rate, overwrite = T)
+
+# for (i in 1:nrow(gavi201910_int_pop_both)){
+#   incidence_rate$country[i] <- clean_country_names(incidence_rate$country[i])
+# }
+## to make the country name consitent: DR Congo -> "Congo, the Democratic Republic of the"
+# incidence_rate %>% filter(country != "DR Congo") -> ir1
+# incidence_rate %>% filter(country == "DR Congo") %>% mutate(country = "Congo, Democratic Republic of the") -> ir2
+# incidence_rate <- bind_rows(ir1, ir2)
+
+# gavi201910_int_pop_both <- fread("data/201910gavi-5_dds-201910_2_int_pop_both.csv")
+# gavi201910_int_pop_both[, country := clean_country_names(country)]
+# use_data(gavi201910_int_pop_both, overwrite = TRUE)
+#
+# life_expectancy <- fread(life_expectancy_data)
+# life_expectancy[, country := clean_country_names(country)]
+# use_data(life_expectancy, overwrite = TRUE)
+#
+# prop_basic_san <- setDT(prop_basic_san)
+# prop_basic_san[, country := clean_country_names(country)]
+# use_data(prop_basic_san, overwrite = TRUE)
+#
+# parameters <- fread("inst/extdata/parameters.csv")
+# usethis::use_data(parameters, overwrite = T)
+
+# p_dying_age <- fread("data/201910gavi-5_dds-201910_p_dying_both.csv")
+# p_dying_age[, country := clean_country_names(country)]
+# use_data(p_dying_age, overwrite = T)
+#
+# country_name_table <- fread("inst/extdata/country_names.csv")
+# names(country_name_table) <- c("country", "iso3")
+# country_name_table <- country_name_table[1:112,] # remove the bottom row, Total
+# country_name_table[, country := clean_country_names(country)]
+# usethis::use_data(country_name_table, overwrite = T)
+```
+
+## Population at risk of cholera or typhoid fever
+We assume that people who have at least basic sanitation are safe from these diseases (or at least, have reduced risk).
+We used the WaSH data from JMP (2000-2017) to fit a saturating exponential function to roughly estimate the trend of WaSH.
+
+## Estimate the proportion of population with access to basic sanitation services
+WaSH data were downloaded from [JMP](https://washdata.org/data/downloads#WLD) and Household World file.
+The data in Excel worksheet format has 4 tabs: introduction and 3 data sheets (water, sanitation, and hygiene).
+We assume that people with at least basic sanitation are protected from cholera, which is a simplifying assumption, which will be addressed (eg, we can alternatively assume that they have lower risk of infection). 
+The data file was opened in MS Excel and each data tab was saved as csv (JMP2019_WLD_water.csv, JMP2019_WLD_sanitation.csv, JMP2019_WLD_hygiene.csv) 
+
+```{r}
+d <- data.table::fread("inst/extdata/JMP_2019_WLD_sanitation.csv")
+d <- d[-c(1,2,4179,4180), c(1,3,6)] # after viewing the file, rows and columns were decided.
+names(d) <- c("country", "year", "prop_san") # proportion of population with at least basic sanitation
+d[, year := as.double(year)]
+d[, country := clean_country_names(country)]
+d <- d[!is.na(d$prop_san),]
+d[, prop_san := as.double(prop_san)/100] # fractions
+
+fit <- matrix(NA, nrow = length(target_countries), ncol = 3)
+for (i in seq_along(target_countries)) {
+  cat("i =", i, "\n")
+  dsan <- d[country == target_countries[i]] 
+  fit[i, ] <- saturating_exp_fit(x = dsan, 
+                                 start = c(2000, 1e-1),
+                                 lower = c(1e-6, 1e-6),
+                                 upper = c(2100-1e-3, 10)) 
+}
+
+# tstamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+# saveRDS(fit, "outputs/fit.rds")
+
+
+## Quick diagnostic plot
+for (i in seq_along(target_countries)) {  
+  cat("i =", i , "/", length(target_countries), "\n")
+  dsan <- d[country == target_countries[i]] 
+  x <- 2000:2100
+  plot(x, 1 - exp(-fit[i, 2] * (x - fit[i, 1])), type='l', main = target_countries[i])
+  points(dsan$year, dsan$prop, col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+prop_basic_san <- setDT(expand.grid(year = 2000:2100, country = target_countries))
+prop_basic_san$pred <- 0
+
+for (i in seq_along(target_countries)) {
+  prop_basic_san[country == target_countries[i], pred := (1 - exp(-fit[i,2] * (year - fit[i, 1])))]
+  # san %>% filter(country == target_countries[i]) %>% 
+  #   mutate(pred = (1 - exp(-fit[i,2] * (year - fit[i, 1])))) -> san
+}
+## Remove negative values
+prop_basic_san[, pred := pmax(pred, 0)]
+  
+## take the mean over the previous years 
+bad_fits <- c(6, 15, 16, 24, 26, 34, 43, 55, 69, 72, 73, 77, 81)
+for (i in seq_along(bad_fits)) {
+  id <- bad_fits[i]
+  x <- mean(d[country == target_countries[id], prop_san])
+  prop_basic_san[country == target_countries[id], pred := rep(x, 101)]
+}
+
+## For countries where no data are available, we take the mean of all countries
+## for which proportion of population is available from year 2000 onwards
+mean2000 <- prop_basic_san[year == 2000, mean(pred)]
+nodata <- c(11, 23, 64, 65, 84)
+for (i in seq_along(nodata)) {
+  id <- nodata[i]
+  prop_basic_san[country == target_countries[id], pred := rep(mean2000, 101)]
+}
+## check again if values are reasonable by plotting them
+for (i in seq_along(target_countries)) {  
+  cat("i =", i , "/", length(target_countries), "\n")
+  dsan <- d[country == target_countries[i]] 
+  pred <- prop_basic_san[country == target_countries[i]] 
+  plot(pred$year, pred$pred, type='l', main = target_countries[i])
+  points(dsan$year, dsan$prop, col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+#
+## Congo, Republic of the missing and fitting again
+dsan <- d[country == "Congo, Republic of the"]
+fit <- saturating_exp_fit(x = dsan, 
+                          start = c(2000, 1e-1),
+                          lower = c(1e-6, 1e-6),
+                          upper = c(2100-1e-3, 10)) 
+
+prop_basic_san_congo <- data.frame(year = 2000:2100, country = "Congo, Republic of the", prop = NA)
+prop_basic_san_congo$prop <- 1 - exp(-fit[2] * (prop_basic_san_congo$year - fit[1]))
+
+plot(prop_basic_san_congo$year, prop_basic_san_congo$prop, type='l', main = unique(dsan$country))
+points(dsan$year, dsan$prop, col=2)
+prop_basic_san <- rbind(prop_basic_san, prop_basic_san_congo)
+
+names(prop_basic_san) <- c("year", "country", "prop")# check the order! 
+usethis::use_data(prop_basic_san, overwrite = TRUE)
+```
+
+
+## Vaccine coverage data
+Data files in csv format were downloaded from the VIMC modeling through the following steps:
+1.	Log on at https://montagu.vaccineimpact.org/
+2.	Select ‘Modellers Contribution Portal’
+3.	Select ‘201910gavi (version 5)’
+
+```{r}
+# vacc_cov_input_campaign_cholera <- fread("data/coverage_201910gavi-5_cholera-campaign-default-test.csv") 
+# vacc_cov_input_campaign_cholera$country <- clean_country_names(vacc_cov_input_campaign_cholera$country)
+# vacc_cov_input_routine_typhoid <- fread("data/coverage_201910gavi-5_typhoid-routine-default-test.csv")
+# vacc_cov_input_campaign_typhoid <- fread("data/coverage_201910gavi-5_typhoid-campaign-default-test.csv")
+vacc_cov_input_routine_typhoid <- fread("coverage_201910gavi-5_typhoid-routine-default.csv")
+vacc_cov_input_campaign_typhoid <- fread("coverage_201910gavi-5_typhoid-campaign-default.csv")
+vacc_cov_input_routine_typhoid$country <- clean_country_names(vacc_cov_input_routine_typhoid$country)
+vacc_cov_input_campaign_typhoid$country <- clean_country_names(vacc_cov_input_campaign_typhoid$country)
+# 
+usethis::use_data(vacc_cov_input_routine_typhoid, overwrite = T)
+usethis::use_data(vacc_cov_input_campaign_typhoid, overwrite = T)
+# usethis::use_data(vacc_cov_input_campaign_cholera, overwrite = T)
+```
+
+## Check functions
+```{r}
+devtools::load_all(".")
+(cntry <- target_countries[1]) # Afghanistan
+# > target_countries[1]
+# [1] "Afghanistan"
+dis <- "Typhoid"
+pop <- setup_cohorts(country = cntry)
+(ir <- incidence_rate[tolower(disease) == tolower(dis) & tolower(country) == tolower(cntry), incidence_rate_100Kpyo])
+(san_RR <- parameters[disease == dis & definition == "relative risk of infection from at least basic sanition", value])
+cases <- calculate_cases(population = pop, country = cntry, disease = dis, ir = ir, sanitation_RR = san_RR)
+head(cases)
+
+yld <- calculate_YLD (disease = dis,
+                      cases = cases,
+                      disability_weight_severe = 1,
+                      disability_weight_moderate = 0,
+                      disability_weight_mild = 0,
+                      prob_inpatient = 1,
+                      prob_outpatient = 0,
+                      prob_nocare = 0,
+                      case_fatality_inpatient = 0.1,
+                      case_fatality_outpatient = 0,
+                      case_fatality_nocare = 0,
+                      illness_duration = 14)
+
+yll <- calculate_YLL(disease = dis,
+                     cases = cases,
+                     country = cntry,
+                     year = 2000:2100,
+                     prob_inpatient = 1,
+                     prob_outpatient = 0,
+                     prob_nocare = 0,
+                     case_fatality_inpatient = 0.1,
+                     case_fatality_outpatient = 0,
+                     case_fatality_nocare = 0)
+
+daly <- calculate_DALY(disease = dis,
+                            country = cntry,
+                            cases = cases,
+                            year = 2000:2100,
+                            disability_weight_severe = 1,
+                            disability_weight_moderate = 0,
+                            disability_weight_mild = 0,
+                            prob_inpatient = 1,
+                            prob_outpatient = 0,
+                            prob_nocare = 0,
+                            case_fatality_inpatient = 0.1,
+                            case_fatality_outpatient = 0,
+                            case_fatality_nocare = 0,
+                            illness_duration = 14)
+daly1 <- yll + yld
+daly[1:5, 1:5]
+daly1[1:5, 1:5]
+```
+
+## Check population size
+```{r}
+yr = 2000:2100
+
+for (cntry in target_countries) {
+  cat("country =", cntry, "\n")
+  g <- gavi201910_int_pop_both[country == cntry & year %in% yr, c("age_from", "year", "value")]
+  gd <- g %>% tidyr::pivot_wider(id_cols = age_from, names_from = year, values_from = value)
+  gd <- gd[, -1]
+  # rr <- sample.int(101, 10)
+  rr <- 1:10
+  print(gd[rr, rr])
+  pop <- setup_cohorts(country = cntry)
+  if (sum(pop < 0) > 0) {
+    stop("Population with negative size")
+  }
+  print(pop[rr, rr])
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+```
+
+## Check vaccine coverage
+```{r}
+cntry <- target_countries[1]
+dis <- "Typhoid"
+# Check vaccine coverage values visually
+for (cntry in target_countries) {
+  cat("country =", cntry, "\n")
+  vc <- create_vaccine_coverage(country = cntry, disease = dis, routine = T)
+  print(vc[1:10, 1:10])
+  print(vc[1:10, 20:30])
+  invisible(readline(prompt = "Press RET to continue"))
+}
+```
+
+## Create vaccine-protected population
+```{r}
+for (cntry in target_countries) {
+  cat("country =", cntry, "\n")
+  pop <- setup_cohorts(country = cntry)
+  vc <- create_vaccine_coverage(country = cntry, disease = dis, routine = T)
+  pop_vacc <- calculate_vaccine_protected(country = cntry, population = pop, disease = dis, vacc_coverage = vc)
+  # rr <- sample.int(min(nrow(pop), ncol(pop)), 10)
+  cc <- 1:10
+  rr <- 1:30
+  
+  cat("Population\n")
+  print(pop[cc, rr])
+  cat("Vaccince protected\n")
+  print(pop_vacc[cc, rr])
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+vc_routine <- lapply(target_countries, 
+                     function(x) create_vaccine_coverage(country = x, disease ="typhoid", routine = T))
+                 
+vc_campaign <- lapply(target_countries, 
+                      function(x) create_vaccine_coverage(country = x, disease ="typhoid", routine = F))
+```
+
+## Make country names consitent across multiple data files
+```{r}
+# clean_country_names()
+# prop_basic_san
+# gavi201910_int_pop_both
+# incidence_rate
+# vacc_cov_input_campaign_typhoid
+# vacc_cov_input_routine_typhoid
+# country_name_table
+# p_dying_age
+
+library(usethis)
+incidence_rate[, country := clean_country_names(country)]
+use_data(incidence_rate, overwrite = T)
+
+## Takes quite long
+gavi201910_int_pop_both[, country := clean_country_names(country)]
+use_data(gavi201910_int_pop_both, overwrite = TRUE)
+
+life_expectancy[, country := clean_country_names(country)]
+use_data(life_expectancy, overwrite = TRUE)
+
+prop_basic_san[, country := clean_country_names(country)]
+use_data(prop_basic_san, overwrite = TRUE)
+
+p_dying_age[, country := clean_country_names(country)]
+use_data(p_dying_age, overwrite = T)
+
+country_name_table[, country := clean_country_names(country)]
+use_data(country_name_table, overwrite = T)
+
+vacc_cov_input_campaign_typhoid[, country := clean_country_names(country)]
+use_data(vacc_cov_input_campaign_typhoid, overwrite = T)
+
+vacc_cov_input_routine_typhoid[, country := clean_country_names(country)]
+use_data(vacc_cov_input_routine_typhoid, overwrite = T)
+
+target_countries <- clean_country_names(target_countries)
+
+dat_list <- list()
+dat_list[["prop_basic_san"]] <- prop_basic_san
+dat_list[["pop"]] <- gavi201910_int_pop_both
+dat_list[["incidence"]] <- incidence_rate
+dat_list[["vacc_cov_campaign"]] <- vacc_cov_input_campaign_typhoid
+dat_list[["vacc_cov_routine"]] <- vacc_cov_input_routine_typhoid
+dat_list[["country_name"]] <- country_name_table
+dat_list[["prob_dying"]] <- p_dying_age
+
+cn <- "Congo"
+nms <- lapply(dat_list, function(x) unique(grep(cn, x$country, value = T)))
+nms
+
+get_names <- function(s) {
+  # nm <- strsplit(s, " ")[[1]][1]
+  lapply(dat_list, function(x) unique(grep(s, x$country, fixed = T, value = T)))
+}
+all_same <- function(x) length(unique(x)) == 1
+
+for (cn in target_countries) {
+  n <- get_names(cn)
+  if (!all_same(n)) {
+    print(n)
+  }
+}
+
+## Supply country names and other columns for vacc_cov_input_campaign_typhoid so the program runs without error
+countries_diff <- 
+  vacc_cov_input_routine_typhoid[
+    !country %in% unique(vacc_cov_input_campaign_typhoid$country)]
+countries_diff$scenario <- "typhoid-campaign-default"
+countries_diff$set_name <- "campaign"
+countries_diff$activity_type <- "campaign"
+countries_diff$target <- 0 # <NA> -> 0
+
+vacc_cov_input_campaign_typhoid <- rbind(vacc_cov_input_campaign_typhoid, countries_diff)
+
+use_data(vacc_cov_input_campaign_typhoid, overwrite = T)
+```
+
+## parameters to explore
+```{r}
+# Odds ratio for the lack of hygiene is 2.20 (1.86, 2.60) based on a systematic review and meta-analysis (Brockett2020)
+# Assuming Odds ratio is a good estimator of relative risk we assume that those who have at least basic sanitation have 45.45% (38.46, 53.76) reduced risk of typhoid infection. Considering a potential bias during the translation from odds ratio to relative risk and also potential differences on the definition of sanitation between studies and also between studies and JMP WASH, we explore a broader range: 30% - 60% 
+```
+
+## fraction of hospitalization
+```{r}
+# data from Table2 in Longley (2020) CID
+dat <- data.frame(country = c("Bangladesh", "Nepal", "Pakistan"),
+                  patients = c(4868, 1595, 2206),
+                  hospitalized = c(1295, 455, 1054), 
+                  deaths = c(0, 2, 4))
+# fraction hospitalized
+p <- dat$hospitalized[1] / dat$patients[1]
+v <- sqrt(p * (1 - p) / dat$patients[1])
+  
+prop.test(dat$hospitalized[1], dat$patients[1], conf.level = 0.95, correct = FALSE)
+prop.test(dat$hospitalized[2], dat$patients[2], conf.level = 0.95, correct = FALSE)
+prop.test(dat$hospitalized[3], dat$patients[3], conf.level = 0.95, correct = FALSE)
+prop.test(dat$deaths[1], dat$hospitalized[1], conf.level = 0.95, correct = FALSE)
+prop.test(dat$deaths[2], dat$hospitalized[2], conf.level = 0.95, correct = FALSE)
+prop.test(dat$deaths[3], dat$hospitalized[3], conf.level = 0.95, correct = FALSE)
+# pooled fraction of hospitalized
+prop.test(sum(dat$hospitalized), sum(dat$patients), conf.level = 0.95, correct = FALSE)
+
+
+```
+$$\alpha = \left(\frac{1−\mu}{\sigma^2}−\frac{1}{\mu}\right)\mu^2$$
+$$\beta = \alpha\left(\frac{1}{\mu}−1\right)$$
+## Given an overall incidence (take the numerator from the incidence rate), proportion of population with at least basic sanitation ($p$), and relative risk of those with basic sanitation ($\pi$), calculate the incidence among those with and without at least basic sanitation. Let the incidence among those without basic sanitation $r$, then the incidence among those with basic sanitation is $\pi r$ and overall incidence ($R$) is then given by 
+$$R = r(1-p+p\pi)$$. Therefore, 
+$$r = \frac{R}{((1-p)+ p\pi)}$$. 
+
+One implementation is below.
+
+## Target countries
+```{r}
+# d <- data.table::fread('coverage_201910gavi-5_typhoid-campaign-default.csv')
+d <- data.table::fread('coverage_201910gavi-5_typhoid-routine-default.csv')
+target_countries <- clean_country_names(unique(d$country))
+```
+
+```{r}
+# parameters for the mean and standard deviation of the normal distribution, which is then transformed using inv_logit function
+mort <- setDT(data.frame(country = c("Bangladesh", "Ethiopia", "Cote d'Ivoire", "Lao", 
+                        "Zimbabwe", "India", "Nigeria", "Senegal", "Other"),
+             cfr_mean = c(-3.45, -1.99, -3.24, -4.27, -2.59, -2.80, -1.69, -3.41, -3.07), 
+             cfr_se = c(0.72*2, 0.44*2, 0.36*2, 0.58*2, 0.25*2, 0.38, 0.28, 0.51, 0.87)))
+
+hosp <- setDT(data.frame(country = c("Bangladesh", "India", "Kenya", "Pakistan"),
+                   frac_hosp_mean = c(-3.72, -2.78, -2.77, -4.21),
+                   frac_hosp_se = c(1.62, 0.37, 1.09, 0.58)))
+
+mort_hosp <- dplyr::full_join(mort, hosp, by = "country") 
+## take the approach used Bilcke (2019) Lancet ID - increase the standard error by two fold as a single study is used to extrapolate to the entire population.
+## data come from Longley (2020) CID
+dat <- data.frame(country = c("Bangladesh", "Nepal", "Pakistan"),
+                  patients = c(4868, 1595, 2206),
+                  hospitalized = c(1295, 455, 1054), 
+                  deaths = c(0, 2, 4))
+library(magrittr)
+dat %<>% mutate(frac_hosp = hospitalized / patients,
+                frac_hosp_se = 2*sqrt(frac_hosp*(1-frac_hosp)/patients),
+                logit_frac_hosp = logit(frac_hosp),
+                cfr_hosp = deaths / hospitalized,
+                cfr_hosp_se = 2*sqrt(cfr_hosp*(1-cfr_hosp)/hospitalized), 
+                logit_cfr_hosp = logit(cfr_hosp))
+
+beta_param_frac_hosp <- est_beta_params(mu = dat$frac_hosp, var = dat$frac_hosp_se^2)
+beta_param_cfr_hosp <- est_beta_params(mu = dat$cfr_hosp, var = dat$cfr_hosp_se^2)
+```
+
+
+## Simulation
+```{r}
+# generate parameter sets to explore
+# run vaccine impact
+devtools::load_all(".")
+set.seed(20210312)
+
+# parameters <- fread("inst/extdata/parameters.csv")
+# usethis::use_data(parameters, overwrite = T)
+
+# b <- get_param_bounds(parameters)
+
+# clean country names
+# mort$country <- clean_country_names(mort$country)
+# hosp$country <- clean_country_names(hosp$country)
+# dat$country <- clean_country_names(dat$country)
+# 
+# param_ty <- parameters[disease == "Typhoid"]
+# 
+# prob_healthcare <- param_ty[definition == "Probability of infected patients seeking health care", c(lower_bound, upper_bound)]
+# prob_inpatients <- param_ty[definition == "Probability that infected patients are admitted to hospital", c(lower_bound, upper_bound)]
+# 
+# case_fatality_care <- param_ty[definition == "case fatality ratio among patients who seek health care", c(lower_bound, upper_bound)]
+# 
+# case_fatality_nocare <- param_ty[definition == "case fatality ratio outside the hospital", c(lower_bound, upper_bound)]
+# 
+# vacc_efficacy <- param_ty[definition == "vaccine efficacy", c(lower_bound, upper_bound)]
+# vacc_duration <- param_ty[definition == "duration of vaccine-induced immunity (year)", c(lower_bound, upper_bound)]
+# dis_weight_severe <- param_ty[definition == "disability weight for severe illness", c(lower_bound, upper_bound)]
+# dis_weight_moderate <- param_ty[definition == "disability weight for moderate illness", c(lower_bound, upper_bound)]
+# dis_weight_mild <- param_ty[definition == "disability weight for mild illness", c(lower_bound, upper_bound)]
+# dur_illness <- param_ty[definition == "duration of illness", c(lower_bound, upper_bound)]
+# sanitation_RR <- param_ty[definition == "relative risk of infection from at least basic sanition", c(lower_bound, upper_bound)]
+
+
+vaccination_scenarios <- c("novacc", "routine", "campaign")
+tstamp <- format(Sys.time(), "%Y%m%d")
+
+for (r in 1:3) {
+  vacc_scenario <- vaccination_scenarios[r]
+  
+  dis <- "Typhoid"
+  nruns <- 30
+  b <- get_param_bounds(parameters, disease = dis)
+  
+  for (k in 1:length(target_countries)) {
+  
+    cn <- target_countries[k]
+  
+    cohort <- list()
+    cases <- list()
+    deaths <- list()
+    dalys <- list() 
+    stoch_param <- data.frame(
+        run_id = 1:nruns,
+        country = cn,
+        disease = dis,
+        vacc_scenario = vacc_scenario,
+        incidence_rate = NA,
+        prob_healthcare = NA,
+        prob_inpatient = NA,
+        prob_outpatient = NA,
+        prob_nocare = NA,
+        disability_wt_severe = NA,
+        disability_wt_moderate = NA,
+        disability_wt_mild = NA,
+        illness_duration = NA,
+        cfr_inpatient = NA,
+        cfr_outpatient = NA,
+        cfr_nohealthcare = NA,
+        sanitation_RR = NA,
+        vacc_efficacy = NA,
+        vacc_immunity_duration = NA 
+        )
+    
+    b$mean_ir <- incidence_rate[tolower(disease) == tolower(dis) & country == cn, incidence_rate_100Kpyo]
+    b$cn <- cn
+    
+    # mean_ir <- incidence_rate[tolower(disease) == tolower(dis) & country == cn, incidence_rate_100Kpyo]
+    
+    for (i in 1:nruns) {
+      # ir <- rpois(1, lambda = mean_ir)
+      par <- sample_params(b)
+      # prob_care <- runif(1, min = prob_healthcare[1], max = prob_healthcare[2])
+      # prob_inp <- runif(1, min = prob_inpatients[1], max = prob_inpatients[2])
+      # prob_outp <- prob_care - prob_inp
+      # prob_nocare <- 1 - prob_care 
+      # cfr_care <- runif(1, min = case_fatality_care[1], max = case_fatality_care[2])
+      # cfr_nocare <- runif(1, min = case_fatality_nocare[1], max = case_fatality_nocare[2])
+      # cfr_inp <- inv_logit(rnorm(1, mean = mort[country == "Other", cfr_mean],
+      #                                   sd = mort[country == "Other", cfr_se]))
+      # if (cn %in% mort$country) {
+      #   cfr_inp <- inv_logit(rnorm(1, mean = mort[country == cn, cfr_mean],
+      #                                   sd = mort[country == cn, cfr_se]))
+      # }
+      # if (cn %in% hosp$country) {
+      #   prob_inp <- inv_logit(rnorm(1, mean = hosp[country == cn, frac_hosp_mean ],
+      #                                   sd = hosp[country == cn, frac_hosp_se]))
+      #   prob_outp <- prob_care - prob_inp
+      # }
+      # 
+      # dis_wt_sev <- runif(1, min = dis_weight_severe[1], max = dis_weight_severe[2])
+      # dis_wt_mod <- runif(1, min = dis_weight_moderate[1], max = dis_weight_moderate[2])
+      # dis_wt_mil <- runif(1, min = dis_weight_mild[1], max = dis_weight_mild[2])
+      # ill_dur <- runif(1, min = dur_illness[1], max = dur_illness[2])
+      # 
+      # san_RR <- runif(1, min = sanitation_RR[1], max = sanitation_RR[2])
+      # vacc_eff <- runif(1, min = vacc_efficacy[1], max = vacc_efficacy[2])
+      # vacc_dur <- runif(1, min = vacc_duration[1], max = vacc_duration[2])    
+      
+      stoch_param$run_id[i] = i
+      stoch_param$incidence_rate[i] = par$ir
+      stoch_param$prob_healthcare[i] = par$prob_care
+      stoch_param$prob_inpatient[i] = par$prob_inp
+      stoch_param$prob_outpatient[i] = par$prob_outp
+      stoch_param$prob_nocare[i] = par$prob_nocare
+      stoch_param$disability_wt_severe[i] = par$dis_wt_sev
+      stoch_param$disability_wt_moderate[i] = par$dis_wt_mod
+      stoch_param$disability_wt_mild[i] = par$dis_wt_mil
+      stoch_param$illness_duration[i] = par$ill_dur
+      stoch_param$cfr_inpatient[i] = par$cfr_inp
+      stoch_param$cfr_outpatient[i] = par$cfr_care
+      stoch_param$cfr_nohealthcare[i] = par$cfr_nocare
+      stoch_param$sanitation_RR[i] = par$san_RR
+      stoch_param$vacc_efficacy[i] = par$vacc_eff
+      stoch_param$vacc_immunity_duration[i] = par$vacc_dur
+      
+      res <- vaccine_impact(disease = par$disease,
+                               country = par$cn,
+                               vacc_scenario = vacc_scenario,
+                               year = 2000:2100,
+                               incidence_rate = par$ir,
+                               sanitation_RR = par$san_RR,
+                               disability_weight_severe = par$dis_wt_sev,
+                               disability_weight_moderate = par$dis_wt_mod,
+                               disability_weight_mild = par$dis_wt_mil,
+                               prob_inpatient = par$prob_inp,
+                               prob_outpatient = par$prob_outp,
+                               prob_nocare = par$prob_nocare,
+                               case_fatality_inpatient = par$cfr_inp,
+                               case_fatality_outpatient = par$cfr_care,
+                               case_fatality_nocare = par$cfr_nocare,
+                               illness_duration = par$ill_dur, 
+                               vaccine_immunity_duration = par$vacc_dur)
+    
+      cohort[[i]] <- round(res$cohort_size)
+      cases[[i]] <- round(res$cases)
+      deaths[[i]] <- round(res$deaths)
+      dalys[[i]] <- res$dalys 
+    }
+    
+    saveRDS(stoch_param, paste0("outputs/param_", tstamp, "_", dis, "_",  cn, "_", vacc_scenario, ".rds"))
+    
+    cohort_size <- vimc_report(disease = dis, country = cn, sim_output = cohort, value_name = "cohort_size")
+    cases <- vimc_report(disease = dis, country = cn, sim_output = cases, value_name = "cases")
+    deaths <- vimc_report(disease = dis, country = cn, sim_output = deaths,value_name = "deaths")
+    dalys <- vimc_report(disease = dis, country = cn, sim_output = dalys, value_name = "dalys")
+    
+    report <- cbind(cohort_size, cases = cases[,ncol(cases)], deaths = deaths[,ncol(deaths)], dalys = dalys[, ncol(dalys)])
+    column_order <- c("disease", "year", "age", "country", "country_name", "cohort_size", "cases", "deaths", "dalys")
+    report <- dplyr::relocate(report, any_of(column_order))
+    saveRDS(report, paste0("outputs/report_", tstamp, "_", dis, "_",  cn, "_", vacc_scenario,  ".rds"))
+  }
+}
+```
+## Simulation update
+Run different vaccine scenario with the same parameter sets
+```{r}
+# load target countries
+d <- data.table::fread('coverage_201910gavi-5_typhoid-routine-default.csv')
+target_countries <- clean_country_names(unique(d$country))
+
+# generate parameter sets to explore
+# run vaccine impact
+devtools::load_all(".")
+set.seed(20210312)
+
+param <- fread("outputs/param20210313Typhoid_combined.csv")
+param <- param[vacc_scenario == "novacc",]
+param <- rbind(param, param, param)
+param[2791:5580, "vacc_scenario" := "routine"]
+param[5581:8370, "vacc_scenario" := "campaign"]
+# > nrow(param) # same of run number
+# [1] 30
+vaccination_scenarios <- c("novacc", "routine", "campaign")
+tstamp <- format(Sys.time(), "%Y%m%d")
+fwrite(param, paste0("outputs/param", tstamp, "Typhoid_combined.csv"))
+
+for (r in 1:3) {
+  vacc_scenario <- vaccination_scenarios[r]
+  
+  dis <- "Typhoid"
+  nruns <- 30
+
+  for (k in 1:length(target_countries)) {
+  
+    cn <- target_countries[k]
+  
+    cohort <- list()
+    cases <- list()
+    deaths <- list()
+    dalys <- list() 
+    
+    for (i in 1:nruns) {
+      par <- param[run_id == i & country == cn & vacc_scenario == "novacc"]
+
+      res <- vaccine_impact(disease = par$disease,
+                               country = par$country,
+                               vacc_scenario = vacc_scenario,
+                               year = 2000:2100,
+                               incidence_rate = par$incidence_rate,
+                               sanitation_RR = par$sanitation_RR,
+                               disability_weight_severe = par$disability_wt_severe,
+                               disability_weight_moderate = par$disability_wt_moderate,
+                               disability_weight_mild = par$disability_wt_mild,
+                               prob_inpatient = par$prob_inpatient,
+                               prob_outpatient = par$prob_outpatient,
+                               prob_nocare = par$prob_nocare,
+                               case_fatality_inpatient = par$cfr_inpatient,
+                               case_fatality_outpatient = par$cfr_outpatient,
+                               case_fatality_nocare = par$cfr_nohealthcare,
+                               illness_duration = par$illness_duration, 
+                               vaccine_immunity_duration = par$vacc_immunity_duration)
+    
+      cohort[[i]] <- round(res$cohort_size)
+      cases[[i]] <- round(res$cases)
+      deaths[[i]] <- round(res$deaths)
+      dalys[[i]] <- res$dalys 
+    }
+    
+    cohort_size <- vimc_report(disease = dis, country = cn, sim_output = cohort, value_name = "cohort_size")
+    cases <- vimc_report(disease = dis, country = cn, sim_output = cases, value_name = "cases")
+    deaths <- vimc_report(disease = dis, country = cn, sim_output = deaths,value_name = "deaths")
+    dalys <- vimc_report(disease = dis, country = cn, sim_output = dalys, value_name = "dalys")
+    
+    report <- cbind(cohort_size, cases = cases[,ncol(cases)], deaths = deaths[,ncol(deaths)], dalys = dalys[, ncol(dalys)])
+    column_order <- c("disease", "year", "age", "country", "country_name", "cohort_size", "cases", "deaths", "dalys")
+    report <- dplyr::relocate(report, any_of(column_order))
+    saveRDS(report, paste0("outputs/report_", tstamp, "_", dis, "_",  cn, "_", vacc_scenario,  ".rds"))
+  }
+}
+```
+
+
+## Combine results into a single file
+```{r}
+# v_scenario <- "routine"
+disease <- c("Typhoid")
+vacc_scenario <- c("novacc", "campaign", "routine")
+tstamp <- "20210316"
+for(dis in disease) {
+  for (vacc in vacc_scenario) {
+    fls <- list.files("outputs", pattern = paste0("^rep.*", tstamp, ".*", dis, ".*", vacc, ".*rds$"), full.names = T)
+    fls
+    x <- lapply(fls, function(x) readRDS(x))
+    res <- do.call(rbind, x)
+    saveRDS(res, paste0("outputs/central", dis, "_", vacc, tstamp, ".rds"))
+  }
+}
+
+# for (vacc in vacc_scenario) {
+#     fls <- list.files("outputs", pattern = paste0("^param.*", tstamp, ".*", dis, ".*", vacc, ".*rds$"), full.names = T)
+#     fls
+#     x <- lapply(fls, function(x) readRDS(x))
+#     res <- do.call(rbind, x)
+#     saveRDS(res, paste0("outputs/param_combined_", dis, "_", vacc, ".rds"))
+# }
+```
+
+## Diagnostic plots
+```{r}
+library(ggplot2)
+for (cn in target_countries){
+  dis <- "Typhoid"
+  vacc <- "campaign"
+  cn <- "Somalia"
+  res <- readRDS(paste0("outputs/central_20210313_",  dis, "_", vacc, ".rds"))
+  plt <- year_val_plot(disease = dis, country = cn, sim_central_value = res)
+  # year_val_plot(disease = dis, country = cn, sim_central_value = res, age = 10)
+  print(plt)
+  invisible(readline(prompt = "Press RET to continue"))
+} 
+```
+
+## Diagnostic plots II
+Visualize cohort size, cases, deaths, and dalys across vaccination scenarios for each of the countries over the period of 2000 - 2100
+```{r}
+library(ggplot2)
+library(grid)
+library(gridExtra)
+dis <- "Typhoid"
+tstamp <- "20210316"
+for (cn in target_countries){
+  res1 <- readRDS(paste0("outputs/central_",  dis, "_", "novacc", tstamp, ".rds"))
+  res2 <- readRDS(paste0("outputs/central_",  dis, "_", "routine", tstamp, ".rds"))
+  res3 <- readRDS(paste0("outputs/central_",  dis, "_", "campaign", tstamp, ".rds"))
+  
+  p1 <- year_val_plot(disease = dis, country = cn, sim_central_value = res1, vacc_scenario = "novacc")
+  p2 <- year_val_plot(disease = dis, country = cn, sim_central_value = res2, vacc_scenario = "routine")
+  p3 <- year_val_plot(disease = dis, country = cn, sim_central_value = res3, vacc_scenario = "campaign")
+  
+  plt <- grid.arrange(p1, p2, p3, ncol = 1)
+  print(plt)
+  invisible(readline(prompt = "Press RET to continue"))
+} 
+```
+
+## Diagnostic 
+1. Check if there are population categories (defined by chronological year and age) have negative numbers
+2. Check if cohort sizes are same across vaccination scenarios 
+3. Check if cases, deaths, and dalys are larger for non-vaccination scenarios compared to vaccination scenarios
+3. Check if cases, deaths, and dalys are larger for routine (or campaign) scenario compared to the 
+```{r}
+dis <- "Typhoid"
+tstamp <- "20210316"
+for (cn in target_countries){
+  res1 <- readRDS(paste0("outputs/central_",  dis, "_", "novacc", tstamp, ".rds"))
+  res2 <- readRDS(paste0("outputs/central_",  dis, "_", "routine", tstamp, ".rds"))
+  res3 <- readRDS(paste0("outputs/central_",  dis, "_", "campaign", tstamp, ".rds"))
+  
+  if (sum(res1$cohort_size != res2$cohort_size) != 0) {
+    cat("Cohort size of novacc and routine scenrios are different for", cn, "\n")
+  }
+  if (sum(res1$cohort_size != res3$cohort_size) != 0) {
+    cat("Cohort size of novacc and campagin scenrios are different for", cn, "\n")
+  }
+  if (sum(res1$cases < res2$cases) != 0) {
+    cat("Cases are bigger for routine scenario than novacc scenrios for", cn, "\n")    
+  }
+  if (sum(res1$cases < res3$cases) != 0) {
+    cat("Cases are bigger for campaign scenario than novacc scenrios for", cn, "\n")    
+  }
+  if (sum(res1$deaths < res2$deaths) != 0) {
+    cat("Deaths are bigger for routine scenario than novacc scenrios for", cn, "\n")    
+  }
+  if (sum(res1$deaths < res3$deaths) != 0) {
+    cat("Deaths are bigger for campaign scenario than novacc scenrios for", cn, "\n")    
+  }
+  if (sum(res1$dalys < res2$dalys) != 0) {
+    cat("DALYs are bigger for routine scenario than novacc scenrios for", cn, "\n")    
+  }
+  if (sum(res1$dalys < res3$dalys) != 0) {
+    cat("DALYs are bigger for campaign scenario than novacc scenrios for", cn, "\n")    
+  }
+}
+```
+
+## Prepare csv files for uploading the results onto Montagu
+```{r}
+library(data.table)
+dis <- "Typhoid"
+tstamp <- "20210316"
+
+for (vacc in c("novacc", "routine", "campaign")) {
+  fl <- list.files("outputs/", pattern = paste0("central.*", dis, ".*", vacc, ".*", tstamp,  ".*rds$"), full.names = T)
+  d <- readRDS(fl)
+  fwrite(d, paste0("outputs/central_", dis, "_", vacc,  tstamp, ".csv"))
+}
+
+# fls <- list.files("outputs", pattern = paste0("^param_combined.*", tstamp, ".*", dis, ".*", ".*rds$"), full.names = T)
+# x <- lapply(fls, function(x) readRDS(x))
+# d <- do.call(rbind, x)
+# fwrite(d, paste0("outputs/param_", dis, "_combined", tstamp, ".csv"))
+```
+
+
+
+
+## Simulation
+```{r}
+# fls <- list.files("outputs", pattern = paste0("*.typ", ".*rds$"), full.names = T)
+# unlink(fls)
+devtools::load_all(".")
+dis <- "Typhoid"
+set.seed(0)
+countries <- target_countries
+
+vacc_scenario = c("novacc", "routine", "campaign")
+output <- list()
+for (vs in vacc_scenario) {
+  output[[vs]] <- stoch_run_scenario(disease = dis, country = countries, vacc_scenario = vs,
+                     runs = 30, year = 2000:2100)
+}
+tstamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+saveRDS(output, paste0("outputs/sim", tstamp, ".rds"))
+# vacc_scenario = c("routine")
+# for (vs in vacc_scenario) {
+#   stoch_run_scenario(disease = dis, country = countries, vacc_scenario = vs,
+#                      runs = 30, year = 2000:2100)
+# }
+#
+# vacc_scenario = c("campaign")
+# for (vs in vacc_scenario) {
+#   stoch_run_scenario(disease = dis, country = countries, vacc_scenario = vs,
+#                      runs = 30, year = 2000:2100)
+# }
+
+```
+
+## Check how stochastic simulation results are averaged
+## function to be executed within the vimc_report function
+```{r}
+sim <- readRDS("outputs/sim20210307T161511.rds")
+af <- sim$novacc$stoch_output$Afghanistan
+length(af)
+
+sim_output <- af$val[[2]] # cases_list
+length(sim_output) # number of independent runs
+sim_output[[1]] # first run out of length(sim_output)
+(!is.data.frame(sim_output)) 
+is.list(sim_output)
+arr <- array(unlist(sim_output), dim = c(dim(sim_output[[1]]), length(sim_output)))
+df <- as.data.frame(rowMeans(arr, na.rm = TRUE, dims = 2))
+rep <- readRDS("outputs/report_Typhoid_Viet Nam_campaign.rds")
+```
+
+
+## Report for the stochastic outputs
+```{r}
+dis <- c("Cholera", "Typhoid")
+dis <- c("Typhoid")
+vacc_scenario = c("novacc", "campaign", "routine")
+
+for (d in dis) {
+  for (vs in vacc_scenario) {
+    if (!(d == "Cholera" & vs == "routine")) {
+      if (d == "Cholera") {
+        cntry <- cntries_cholera
+      } else {
+        cntry <- cntries_typhoid
+      }
+      list1 <- list()
+      for(i in seq_along(cntry)){
+        output1 <- readRDS(paste0("outputs/stoch_output_", d, "_",  cntry[i], "_", vs, ".rds"))
+        list1[[i]] <- vimc_stoch_report(disease = d, country = cntry[i], sim_output = output1)
+      }
+      res <- do.call("rbind", list1)
+      saveRDS(res, paste0("outputs/stoch_", d, "_", vs, ".rds"))
+    }
+  }
+}
+```
+
+## Uploading the results
+```{r}
+library(data.table)
+# dis <- "typhoid"
+# v_scenario <- "routine"
+# fls <- list.files("./data", pattern=paste0("central.*", dis, ".*", v_scenario, ".*rds$"), full.names = T)
+# d <- readRDS(fls)
+# fwrite(d, paste0("outputs/", sim, "_", dis, "_", v_scenario, ".csv"))
+
+
+dis <- c("Cholera", "Typhoid")
+dis <- c("Typhoid")
+vacc <- c("novacc", "campaign", "routine")
+sims <- c("stoch", "central")
+
+for (d in dis) {
+  for (v in vacc) {
+    for (sim in sims){
+      if (!(tolower(d) == "cholera" & tolower(v) == "routine" )){
+        fls <- list.files("outputs", pattern = paste0(sim, "_", d, "_", v, ".rds$"), full.names = T)
+        fls
+        res <- readRDS(fls)
+        res$disease <- d
+        fwrite(res, paste0("outputs/", sim, "_", d, "_", v, ".csv"))
+      }
+    }
+  }
+}
+
+##
+# fwrite(parameters, "outputs/parameters.csv")
+# fwrite(incidence_rate, "outputs/incidence_rate.csv")
+```
+
+```{r}
+sim <- "stoch"
+# d <- "Cholera"
+v <- "novacc"
+fls <- list.files("outputs/", pattern = paste0(sim, "(.*)param(.*).rds$"), full.names = T)
+for (fl in fls) {
+  res <- readRDS(fl)
+  fwrite(res, gsub("rds$", "csv", fl))
+}
+fls
+c1 <- readRDS(fls[2])
+c1$vacc_type <- "No vaccination"
+c2 <- readRDS(fls[1])
+c2$vacc_type <- "Campaign"
+c <- rbind(c1,c2)
+c$`disability weight` <- 0.202
+c$`duration of illness` <- "5 days"
+c$`case fatality ratio` <- 0.030
+c$`duration of vaccine-induced immunity` <- "3 years"
+c$`vaccine efficacy` <- 0.640
+c$`vaccine efficacy (< 5 yo)` <- 0.300
+
+fwrite(c, "outputs/stoch_param_Cholera.csv")
+
+t1 <- readRDS(fls[4])
+t1$vacc_type <- "No vaccination"
+t2 <- readRDS(fls[3])
+t2$vacc_type <- "Campaign"
+t3 <- readRDS(fls[5])
+t3$vacc_type <- "Campaign and Routine"
+
+t <- rbind(t1, t2, t3)
+t$`disability weight` <- 0.053
+t$`duration of illness` <- "28 days"
+t$`case fatality ratio` <- 0.01
+t$`duration of vaccine-induced immunity` <- "19 years"
+t$`vaccine efficacy` <- 0.95
+
+fwrite(t, "outputs/stoch_param_Typhoid.csv")
+```
+
+## Cholera report
+```{r}
+devtools::load_all(".")
+target_countries <- c("DRC", "Kenya", "Somalia", "South Sudan", "Ethiopia" )
+cntry <- clean_country_names(target_countries)
+library(data.table)
+
+vc_list_cmp <- lapply(cntry, function(x) create_vaccine_coverage(country = x, disease = "Cholera", routine = F))
+
+pop <- setup_cohorts(country = nms[1])
+pop_vacc <- calculate_vaccine_protected(country = nms[1], population = pop, vacc_coverage = vc_list[[1]])
+
+```
+
+## Parameter reset
+```{r}
+# parameters <- fread("data/parameters.csv")
+oripar <- parameters
+newpar <- oripar[1:3,]
+newpar$value <- newpar$value * 10
+revpar <- reset_param(new = newpar, original = oripar)
+```
+
+## Output file check
+```{r}
+# parameters <- fread("data/parameters.csv")
+library(data.table)
+res <- fread("outputs/central_Typhoid_campaign.csv")
+res %>% filter(country == "IND", year %in% 2023:2026) -> res1
+sum(res1 < 0)
+## It has negative values  
+cntry <- "India"
+pop <- setup_cohorts(country = cntry)
+cas <- calculate_cases(disease = "Typhoid", country = cntry, population = pop)  
+```
+
+
+

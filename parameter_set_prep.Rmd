@@ -1,0 +1,57 @@
+---
+title: "Untitled"
+author: "Jong-Hoon Kim"
+date: "8/29/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Generate a lognormally distributed random variable for a given mean $m$ and standard deviation $s$. 
+
+`rlnorm` function requires meanlog, $\mu$, sdlog paramters, $\sigma$, which
+can be calculated as follows:
+
+
+$$\mu = \ln\left(\frac{m^2}{\sqrt{s+m^2}}\right), ~\sigma = \sqrt{\ln\left(1+\frac{s}{m^2}\right)}$$
+
+```{r cars}
+m <- 0.3 # mean of the variable
+s <- 0.5 # standard deviation of the variable
+mu <- log(m^2/sqrt(s^2+m^2))
+sigma <- sqrt(log(1+s^2/m^2))
+x <- rlnorm(1e6, meanlog = mu, sdlog = sigma)
+mean(x)
+sd(x)
+```
+
+## Create beta distributrion for a given mean and standard deviation
+
+$$\alpha = \left(\frac{1−\mu}{\sigma^2}−\frac{1}{\mu}\right)\mu^2$$
+$$\beta = \alpha\left(\frac{1}{\mu}−1\right)$$
+## To create functions to include separately
+```{r pressure, echo=FALSE}
+est_beta_params <- function(mean, sd) {
+  alpha <- ((1 - mean)/sd^2 - 1/mean) * mean^2
+  beta <- alpha * (1/mean - 1)
+  return (params = list(alpha = alpha, beta = beta))
+}
+
+est_lnorm_params <- function(mean, sd) {
+  mu <- log(mean^2/sqrt(sd+mean^2))
+  sigma <- sqrt(log(1+sd/mean^2))
+  return (params = list(mu = mu, sigma = sigma))
+}
+```
+
+## To create
+```{r}
+library(lhs)
+A <- optimumLHS(30, 10, maxSweeps = 4, eps = 0.01)
+B <- matrix(nrow = nrow(A), ncol = ncol(A))
+# A <- pomp::sobol_design(lower=rep(0,10), upper=rep(1,10), nseq = 100)
+```

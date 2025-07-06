@@ -1,0 +1,914 @@
+---
+title: "Cholera model inputs updates 2025"
+author: "Jong-Hoon Kim"
+date: "2025-07-02"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+Model inputs associated with population and life expectancy are defined in `typhoid_model_inputs.Rmd`
+```{r eval=FALSE}
+# templates <- fread("inst/extdata/central-burden-template.202310gavi-4.Cholera_IVI-Kim_standard.csv")
+# target_countries_cholera <- clean_country_names(unique(templates$country_name))
+# # usethis::use_data(target_countries_cholera, overwrite = T)
+# 
+# ocv1_cov <-
+#   fread("inst/extdata/coverage_202310gavi-4_cholera-ocv1-default.csv")
+# 
+# ocv12_cov <-
+#   fread("inst/extdata/coverage_202310gavi-4_cholera-ocv1-ocv2-default.csv")
+# 
+# # standardize country names
+# ocv1_cov$country <- clean_country_names(ocv1_cov$country)
+# # standardize country names
+# ocv12_cov$country <- clean_country_names(ocv12_cov$country)
+# 
+# vacc_cov_input_cholera <- list()
+# vacc_cov_input_cholera[[1]] <- ocv1_cov
+# vacc_cov_input_cholera[[2]] <- ocv12_cov
+# usethis::use_data(vacc_cov_input_cholera, overwrite = T)
+# 
+# vacc_scenarios_cholera <- 
+#   c("novacc", "campaign_default_ocv1","campaign_default_ocv12")
+# usethis::use_data(vacc_scenarios_cholera, overwrite = T)
+
+# 
+# dis <- "Cholera"
+# parameters <- data.table::fread("inst/extdata/parameters.csv")
+# # usethis::use_data(parameters, overwrite = T)
+# parameter_data_cholera <-
+#   parameters %>% filter(tolower(disease) == tolower(dis))
+# usethis::use_data(parameter_data_cholera, overwrite = T)
+# 
+# cfr_data_cholera <- fread("outputs/cholera_cfr.csv")
+# cfr_data_cholera$country <- clean_country_names(cfr_data_cholera$country)
+# usethis::use_data(cfr_data_cholera, overwrite = T)
+# data.table::fwrite(cfr_data_cholera, "outputs/cholera_cfr.csv")
+
+# population data for the 2023 runs were created in the # typhoid_model_inputs_2023.Rmd and used here
+# pop <- fread("inst/extdata/202310gavi-4_dds-202208_int_pop_both.csv")
+# pop %>% select(country, age_from, as.character(2000:2100)) -> pop
+```
+
+## OCV indirect effectiveness data
+
+```{r}
+# Ali (2005) Matlab, Bangladesh
+# Individuals targeted for the trial, 89 596
+# this is the first year of 4 035 in surveillance and therefore
+# vaccine waning is ignored
+vc_cut <- c(0, 28, 35, 40, 50, 65)
+vc_matlab <- vc_cut[1:5] + diff(vc_cut)/2
+ve_first_year <- 0.65 # the data coming from the first year of vaccination
+eff_vc_matlab <- ve_first_year * vc_matlab 
+ir <- c(7.01, 5.87, 4.72, 4.65, 1.47)
+# lowest vaccine coverage group has no indirect effect
+ive_matlab <- (ir[1]-ir)/ir[1]*100
+
+# Ali (2013) Kolkata, India
+# 3-year follow-up.  Total protective efficacy remained high (66%)
+# therefore, effective vaccine coverage still calculated as we did for
+# Matlab, Bangladesh data
+# 107 347 eligible residents, 66 990 received 2 doses
+vc_cut <- c(0, 25, 28, 31, 34, 100*66990/107347)
+vc_kolkata <- vc_cut[1:5] + diff(vc_cut)/2
+ve_first_year <- 0.65 # the data coming from the first year of vaccination
+eff_vc_kolkata <- ve_first_year * vc_kolkata
+ir <- c(5.54, 5.64, 2.48, 2.25, 1.93)
+ive_kolkata <- (ir[1]-ir)/ir[1]*100
+
+ive_dat <- data.frame(eff_vacc_cov = c(eff_vc_kolkata, eff_vc_matlab), indirect_vacc_eff = c(ive_kolkata, ive_matlab))
+# ive_dat$indirect_vacc_eff[ive_dat$indirect_vacc_eff < 0] <- 0 
+ive_dat <- ive_dat / 100
+
+fit_logis <- nls(indirect_vacc_eff ~ SSlogis(eff_vacc_cov, Asym, xmid, scal), 
+                   ive_dat)
+Asym <- coef(fit_logis)["Asym"]
+xmid <- coef(fit_logis)["xmid"]
+scal <- coef(fit_logis)["scal"]
+x <- seq(0, 1, by=0.01) #construct a range of x values bounded by the data
+y <- Asym / (1 + exp((xmid - x)/scal)) #predicted mass
+
+# calc_indirect_eff_logistic_cholera <- function(x){
+#   0.8692599  / (1 + exp((0.3955624  - x) / 0.1153905))
+# }
+
+# calc_indirect_eff_logistic_cholera <- function(x){
+#   0.9407624   / (1 + exp((0.2698561 - x) / 0.07744146 ))
+# }
+calc_indirect_eff_logistic_cholera <- function(x){
+  Asym / (1 + exp((xmid - x)/scal))
+}
+
+plot(ive_dat$eff_vacc_cov, ive_dat$indirect_vacc_eff, xlim=c(0,1), ylim=c(0,1))
+lines(x, calc_indirect_eff_logistic_cholera(x), col=2)
+pred <- data.frame(x = x, y = y)
+cutoff <- 0.1
+pred[pred$x < cutoff, ]$y <- 0
+plot(pred$x, pred$y, type = "l")
+points(ive_dat$eff_vacc_cov, ive_dat$indirect_vacc_eff, col=2)
+
+library(ggplot2)
+# p <- ggplot(pred) + 
+#   geom_line(aes(x, y)) + 
+#   geom_point(data=ive_dat, aes(eff_vacc_cov,indirect_vacc_eff), color = "red") + 
+#   labs(x="Vaccine coverage", y="Indirect vaccine efficacy") + 
+#   scale_x_continuous(limits=c(0,0.7))
+# p
+# ggsave(paste0("plots/indirect_vacc_eff.png"), p, width=3.4*1.6, height=2.7*1.6, units="in")
+```
+
+## Incidence rate data (per 100,000 person-year)
+
+```{r}
+person_years <- 100000
+overall_incid_rate_cholera_2023 <- readRDS("outputs/overall_incid_rate_cholera_2023_20250703.rds")
+ir_rst_WHO_JHU <- data.table::fread("outputs/ir_cholera_raster_WHO_JHU.csv")
+```
+
+```{r}
+cntry_update <- c("Yemen", "Haiti", "India", "Bangladesh")
+```
+
+### Incidence rate by country 
+
+Cholera-country level incidence rates are based on the study by Lessler et al. (2018) in which the grid-level incidence rate (20 km by 20 km) are provided. On the web repository (http://www.iddynamics.jhsph.edu/projects/cholera-dynamics), estimates for the number of cases ("case.tif") and incidence rates ("rate.tif") were downloaded.
+
+The raster-based incidence rates were compared with the WHO case reports, in particular, more recent reports (since 2000).
+
+### Raster-based incidence rate
+```{r eval=FALSE}
+library(raster)
+rate <- raster("data/rate.tif") # rate per person per 20 km by 20 km grid cell
+case <- raster("data/case.tif") # case per  20 km by 20 km grid cell
+af <- readRDS("data/africa_adm0_shp.rds")
+# country boundary to identify grid cells that belong to a country
+# ppp <- readRDS("outputs/ppp_af_2010_20km.rds")# population density to get the number of cases
+# country names with subregion and region
+# subregion_country <- read.csv("data/africa_subregion_country_names.csv")
+cntries <- clean_country_names(af$NAME_0)
+df <- data.frame(country = cntries, cases = NA)
+for (cn in cntries) {
+  cnpoly <- af[af$NAME_0 == cn, ]
+  # extract cells that fall on to the country and sum cases
+  df[df$country == cn, ]$cases <- 
+    sum(raster::extract(case, cnpoly)[[1]], na.rm = TRUE)
+  # # population size for the country
+  # df[df$country == cn, ]$population <- 
+  #   sum(raster::extract(ppp, cnpoly)[[1]], na.rm = TRUE)
+}
+# divide the population size (UN) to get country-level incidence rate
+
+population_data %>% 
+  dplyr::select("country", "2010") %>% 
+  rename(country = country, pop = "2010") %>% 
+  group_by(country) %>% 
+  summarise(population = sum(pop)) -> pop2010
+
+pop2010$country <- clean_country_names(pop2010$country)
+
+df <- left_join(df, pop2010, by = "country")
+
+df$rate <- df$cases / df$population * person_years
+df$cases <- round(df$cases)
+
+incidence_rate_cholera <- 
+  data.frame(disease = "cholera", country = df$country, ir = df$rate)
+names(incidence_rate_cholera) <- 
+  c("disease", "country", "mean_incidence_per_100K")
+
+# saveRDS(incidence_rate_cholera, sprintf("outputs/cholera_incidence_rate_country_pop_2010_%s.rds", tstamp()))
+
+# usethis::use_data(incidence_rate_cholera, overwrite = T)
+
+## Prepare 2010 population raster
+# ppp <- raster("data/ppp_2010_1km_Aggregated.tif")
+# rst <- raster::aggregate(ppp, fact = 20, fun = sum)
+# rst <- raster::crop(rst, extent(af), snap = "out")
+# rst <- mask(rst, mask = af)
+# names(rst) <- "ppp_2010_20km_aggregated"
+# # saveRDS(rst, sprintf("outputs/ppp_af_2010_20km_%s.rds", tstamp()))
+# file moved from the outputs to the data folder
+# rst <- readRDS("data/ppp_af_2010_20km_20231121.rds")
+# raster::plot(rst)
+```
+
+
+WHO incidence data can be acquired through the [Global Health Observatory data repository](https://apps.who.int/gho/data/?theme=main)
+
+```{r}
+reported_cholera <- fread("inst/extdata/CHOLERA_case_21Noc2023.csv")
+setnames(reported_cholera, c("country", "year", "num_cholera_reported"))
+reported_cholera[, num_cholera_reported := as.integer(num_cholera_reported)]
+reported_cholera <- as.data.frame(reported_cholera)
+```
+
+We identified the country-specific incidence rates for the countries where outbreaks have been reported. These countries included Yemen (Eastern Mediterranean Region), Haiti (Americas Region), Bangladesh (South-East Asian Region), and India (South-East Asian Region).
+
+#### Yemen 
+
+[Our World In Data](https://ourworldindata.org/country/yemen#search=cholera) has the cholera incidence, deaths, and case fatality ratio data. As of 23 November 2023, the following data are available for Yemen:
+
+------------
+1971	190
+1972	1064
+1973	215
+1974	6
+1975	1
+1978	414
+1979	1953
+1980	720
+1992	4
+2009	55
+2010	300
+2011	31789
+2016	15751
+2017	1032481
+2018	371326
+2019	861096
+2020	275712
+2021	72765
+------------
+
+ - Monthly reports appear at the [page](https://www.emro.who.int/health-topics/cholera-outbreak/latest-updates.html)
+
+ - The [latest report](https://www.emro.who.int/pandemic-epidemic-diseases/cholera/acute-watery-diarrhoeacholera-updates-15-october-2023.html) was on Oct 15, saying 5623 cases and 7 deaths for January-September 2023. 
+
+ - Between 16 October and 31 December 2023, a total of 1,018 reported cases were associated with the outbreak, spanning 23 districts in 9 governorates of southern and eastern Yemen.(https://www.unocha.org/publications/report/yemen/yemen-humanitarian-update-issue-11-december-2023)
+ - 3279 cases in 2023, which did not account for the data from Northern Yemen (https://www.emro.who.int/pandemic-epidemic-diseases/cholera/acute-watery-diarrhoeacholera-updates-31-december-2023.html)
+ 
+ - 249 900 suspected cases of cholera, with 861 associated deaths (Jan 1 - Dec 1, 2024) from WHO [page](https://www.emro.who.int/media/news/yemen-reports-the-highest-burden-of-cholera-globally.html) 
+```{r}
+# EDIT: 11 Jan 2024
+# cases are adopted from Our World in Data since 2010
+library(dplyr)
+yrs = c(2010,2011,2016,2017,2018,2019,2020,2021,2023,2024)
+ann_case = c(300,31789,15751,1032481,371326,861096,275712,72765,3279,249900)
+
+yrs = yrs[1:8]
+
+pop = population_data |> filter(country == "Yemen") |>
+  select(as.character(yrs)) |> colSums()
+
+# we assume that the cases were not reported rather than zero, in the missing years. 
+overall_ir = sum(ann_case) / sum(pop) * person_years
+
+# The above value is also suppported by the [reliefweb](https://reliefweb.int/report/yemen/yemen-cholera-outbreak-dg-echo-dg-echo-partners-echo-daily-flash-4-december-2023#:~:text=The%20cumulative%20number%20of%20cholera,000%2C%20including%204%2C000%20related%20deaths)
+# years = 2016:2021
+# cases = 2500000
+# pop = population_data |> filter(country == "Yemen") |>
+#   select(as.character(years)) |> colSums()
+# overall_ir = sum(cases) / sum(pop) * 100000
+
+yemen <- data.frame(country = "Yemen",
+                    year = yr,
+                    num_cholera_reported = ann_case)
+
+reported_cholera <- rbind(reported_cholera, yemen)
+
+# 1:8 was used just to reproduce the burden when the data up to 2021 
+# was available
+
+xbar <- mean(ann_case[1:8] / pop * person_years)
+sx <- sd(ann_case[1:8] / pop * person_years)
+
+overall_incid_rate_cholera[country == "Yemen", ir_sim := xbar]
+overall_incid_rate_cholera[country == "Yemen", ir_sim_sd := sx]
+```
+
+#### Haiti
+
+Haiti 2010-2020 data were copied from https://mspp.gouv.ht/site/downloads/Profil%20statistique%20Cholera%203eme%20SE%202020.pdf
+ 
+Situation report is available from the Ministry of Health (MINISTÈRE DE LA SANTÉ PUBLIQUE ET DE LA POPULATION(MSPP)) [hompeage](https://mspp.gouv.ht/site/downloads/Sitrep%20cholera_07_novembre_2023.pdf)
+
+Haiti has been free of cholera since January 2019 [Wikipedia page](https://en.wikipedia.org/wiki/2010s_Haiti_choleraoutbreak).
+
+The new first case reappeared in Oct 1, 2022 [link](https://mspp.gouv.ht/site/downloads/Cholera%20communique%201%20.pdf) and 
+69,992 cumulative suspected cases as of Nov 6. 2023 [link](https://mspp.gouv.ht/site/downloads/Sitrep%20cholera_07_novembre_2023.pdf). 
+
+In general documents on disease occurrence area available [here](https://www.mspp.gouv.ht/documentation/).
+
+```{r}
+haiti <- fread("inst/extdata/haiti_2010_2023.csv")
+haiti_df <- data.frame(country = "Haiti", 
+                       year = 2010:2023, 
+                       num_cholera_reported =  haiti$cases)
+
+years = 2010:2023
+pop = population_data |> filter(country == "Haiti") |>
+  select(as.character(years)) |> colSums()
+
+(overall_ir = sum(haiti_df$num_cholera_reported) / sum(pop) * person_years)
+
+ir_data <- haiti_df$num_cholera_reported / pop * person_years
+xbar <- mean(ir_data)
+sx <- sd(ir_data) 
+# Haiti 2010-2020 data will come from a different source (above)
+reported_cholera %>% 
+  dplyr::filter(!(country == "Haiti" & year > 2009)) -> reported_cholera
+
+reported_cholera <- rbind(reported_cholera, haiti_df)
+
+# update the simulation input parameter, overall_incid_rate_cholera
+
+overall_incid_rate_cholera[country == "Haiti", ir_sim := xbar]
+overall_incid_rate_cholera[country == "Haiti", ir_sim_sd := sx]
+```
+
+
+#### Bangladesh
+
+[Azman et al.](https://www.thelancet.com/journals/lanmic/article/PIIS2666-5247(20)30141-5/fulltext) estimates seroincidence to be $17.3\% (95\% ~\textrm{CI}~ 10.5-24.1)$.
+This refers to the number of infections. 
+
+EDIT 2025-07-02
+However, incidence of symptomatic infections for Bangladesh is better described in the study (Hegde et al. (2024) Nat Med. 2024 Mar;30(3):888–95).  
+
+> The incidence rate of symptomatic cholera, including both those who were
+medically attended and those who were not, was 0.6 per 1,000 per
+year (95% CrI = 0.5–0.8) with elderly people having twice the incidence
+rate compared with others (Table 2).
+
+
+```{r}
+
+# average from 1990 to 2000 as the data from 2001 not available
+reported_cholera$year <- as.integer(reported_cholera$year)
+reported_cholera[country == "Bangladesh" & year %in% 1990:2000] -> ban
+mean <- mean(ban$reported_case_per_100K, na.rm = T)
+
+# The incidence rate of symptomatic cholera, including both those who were
+# medically attended and those who were not, was 0.6 per 1,000 per
+# year (95% CrI = 0.5–0.8)
+xbar1 <- 0.6 / 1000 * person_years
+# upper <- 0.8 / 1000 * person_years
+# lower <- 0.5 / 1000 * person_years
+# sx <- (((upper - lower)/2)/1.96)^2
+```
+
+
+
+On the other hand, 
+Paul RC, Faruque ASG, Alam M, Iqbal A, Zaman K, Islam N, et al. Incidence of severe diarrhoea due to Vibrio cholerae in the catchment area of six surveillance hospitals in Bangladesh. Epidemiol Infect. 2016 Apr;144(5):927–39. 
+```{r}
+# Table 3.  
+df <- data.frame(population = c(10368, 993, 225, 247, 176, 186)*1e3, 
+                 cases = c(16950, 1640, 257, 51, 264, 148),
+                 prop_health_seek = c(0.62, 0.33, 1.0, 0.70, 0.40, 0.44),
+                 ir_adj = c(2.6, 4.9, 1.1, 0.3, 3.7, 1.8))
+ir_adj_test <- df$cases / df$population / df$prop_health_seek * 1e3
+ir_adj_test - df$ir_adj
+
+ir_weighted <- weighted.mean(df$ir_adj, df$population)
+
+# Adjust for health seeking behavior
+df$cases_adj <- df$cases / df$prop_health_seek
+
+
+# Total estimated cases and population
+total_cases <- sum(df$cases_adj)
+total_pop <- sum(df$population)
+
+# Incidence rate per 100,000
+inc_rate <- (total_cases / total_pop) * person_years
+# factor of 2 is multiplied to account for a conservative proportion (0.5)of severe cases out of all cases
+#  Ngere P, Langat D, Ngere I, Dawa J, Okunga E, Nasimiyu C, et al. A protracted cholera outbreak in Nairobi City County accentuated by mass gathering events, Kenya, 2017. PLoS One. 2024;19(8):e0297324. 
+# 52.1% outpatient
+# we take conservative estimates because another study states that 5%-10% of # symptomatic infections become severe cases
+xbar2 <- inc_rate / 0.419 
+``` 
+
+
+
+```{r}
+xbar <- (xbar1 + xbar2) / 2
+
+overall_incid_rate_cholera[country == "Bangladesh", ir_sim := xbar]
+overall_incid_rate_cholera[country == "Bangladesh", ir_sim_sd := xbar*1.5]
+
+
+# wrap the following in a function
+overall_incid_rate_cholera$ub <- NA
+overall_incid_rate_cholera$lb <- NA
+overall_incid_rate_cholera$meanlog <- NA
+overall_incid_rate_cholera$sdlog <- NA
+
+for (i in 1:nrow(overall_incid_rate_cholera)) {
+  m <- overall_incid_rate_cholera$ir_sim[i]
+  sd <- overall_incid_rate_cholera$ir_sim_sd[i]
+  pars <- calc_lognorm_pars(mean = m, sd = sd)
+  cat("m =", m, ", sd =", sd, ", mu =", pars$mu, ", sigma =", pars$sigma, "\n")
+  
+  overall_incid_rate_cholera$meanlog[i] <- pars$mu
+  overall_incid_rate_cholera$sdlog[i] <- pars$sigma
+  
+  overall_incid_rate_cholera$lb[i] <- 
+    qlnorm(0.025, meanlog = pars$mu, sdlog = pars$sigma)
+  overall_incid_rate_cholera$ub[i] <-
+    qlnorm(0.975, meanlog = pars$mu, sdlog = pars$sigma)
+}
+
+usethis::use_data(overall_incid_rate_cholera, overwrite = TRUE)
+```
+
+
+
+#### India
+# [Deen et al](https://journals.plos.org/plosntds/article?id=10.1371/journal.pntd.0000173) showed that the incidence rate from Kolkata, India (1 May 2003 to 30 April 2005) was $1.6$ per $1000$ pyo
+
+```{r}
+xbar <- 1.6/1000 * person_years
+
+overall_incid_rate_cholera[country == "India", ir_sim := xbar]
+overall_incid_rate_cholera[country == "India", ir_sim_sd := xbar*1.5]
+```
+
+```{r}
+# JHU <- fread("inst/extdata/Incidence Rates Used in Model.csv")
+# JHU$Country <- clean_country_names(JHU$Country)
+# names(JHU) <- c("country", names(JHU)[2:5])
+# 
+# ir_rst_WHO_JHU <- left_join(JHU, ir, by = "country")
+# fwrite(ir_rst_WHO_JHU, "outputs/ir_cholera_raster_WHO_JHU.csv")
+# ir_rst_WHO_JHU <- data.table::fread("outputs/ir_cholera_raster_WHO_JHU.csv")
+```
+
+### 
+We used the raster-based incidence rate where applicable and used cases reported to WHO otherwise. As we do not have full posterior distribution for the raster-based incidence rate, we a simplified lognormal distribution where standard
+deviation was informed from the WHO data set.
+
+For Haiti, we used the data set that span 2010-2020 compiled by the Ministry of
+Public Health and Population, Haiti [MINISTERE SANTE PUBLIQUE ET DE LA POPULATION
+(MSPP)](https://mspp.gouv.ht/site/downloads/Profil%20statistique%20Cholera%203eme%20SE%202020.pdf)
+and used the mean of the past 5 years. We chose only the recent years
+because the Haiti is recovering a large outbreak that started in 2010. 
+There appears to be a significant trend of decrease in 
+recent years (e.g., total cases reported in 2010-2020 were 185351, 352033,
+101503, 58574,27392,36045,41421,13681, 3777 ,720, 19). 
+
+For Yemen, a large outbreak is ongoing (e.g., 2016-) and our incidence rates
+include cases that have been reported before 2016 (2009, 2010, 2011, and 2016).
+We treated the years there were no records as missing values and ignored them
+rather than treating them as zero. Zero cases are also reported.
+
+Mean and standard deviation parameter (mu and sigma, respectively) of a
+lognormal distribution for a given mean, m, and standard deviation of sqrt(v)
+$$\mu = \mathrm{ln}\left(\frac{m^2}{\sqrt{v+m^2}} \right),
+\sigma = \sqrt{\mathrm{ln}\left(1 + \frac{v}{m^2} \right)}$$
+```{r}
+# m = 80 # mean of Y
+# v = 225; # variance of Y              
+# phi = sqrt(v + m*m);
+# mu    = log(m*m/phi);          # mean of log(Y)
+# sigma = sqrt(log(phi*phi/(m*m))); # std dev of log(Y) 
+# 
+# x <- rlnorm(1e5, meanlog = mu, sdlog = sigma)
+# mean(x)
+# sd(x)
+# median(x)
+
+calc_lognorm_pars.R <- function(mean, sd){
+  v <- sd*sd
+  m <- mean
+  phi <- sqrt(v + m*m);
+  mu <- log(m*m/phi);                # mean of log(Y)
+  sigma <- sqrt(log(phi*phi/(m*m))); # std dev of log(Y)
+  
+  return(list(mu = mu, sigma = sigma))
+}
+
+# param <- calc_lognorm_pars.R(28, 53)
+# xx <- rlnorm(1e5, meanlog = param$mu, sdlog = param$sigma)
+# mean(xx)
+# sd(xx)
+# median(xx)
+
+```
+
+## Incidence rates
+
+Raster-based incidence rates are used as baseline and if they are not 
+available, WHO case reported data are used instead. Incidence rates are realized as a Lognormal random variable whose mean equals the mean (
+raster-based value or WHO case reports) and standard deviation is assumed to be
+1.5 times the mean. This value is based on a central value of observed 
+coefficient of variation in WHO studies and also reported in Lessler et al. 
+Lancet (2018) article. It may be worth considering varying the standard deviation across the range (e.g., 0.2-3)
+
+```{r}
+overall_incid_rate_cholera$ub <- NA
+overall_incid_rate_cholera$lb <- NA
+overall_incid_rate_cholera$meanlog <- NA
+overall_incid_rate_cholera$sdlog <- NA
+
+for (i in 1:nrow(overall_incid_rate_cholera)) {
+  m <- overall_incid_rate_cholera$ir_sim[i]
+  sd <- overall_incid_rate_cholera$ir_sim_sd[i]
+  pars <- calc_lognorm_pars(mean = m, sd = sd)
+  cat("m =", m, ", sd =", sd, ", mu =", pars$mu, ", sigma =", pars$sigma, "\n")
+  
+  overall_incid_rate_cholera$meanlog[i] <- pars$mu
+  overall_incid_rate_cholera$sdlog[i] <- pars$sigma
+  
+  overall_incid_rate_cholera$lb[i] <- 
+    qlnorm(0.025, meanlog = pars$mu, sdlog = pars$sigma)
+  overall_incid_rate_cholera$ub[i] <-
+    qlnorm(0.975, meanlog = pars$mu, sdlog = pars$sigma)
+}
+
+usethis::use_data(overall_incid_rate_cholera, overwrite = TRUE)
+# fwrite(overall_incid_rate_cholera, "outputs/overall_incid_rate_cholera.csv")
+```
+
+```{r}
+## extract WASH risk estimates
+params <- fread("inst/extdata/parameters.csv")
+params_wash <- filter(params, source == "Wolfe (2018)")
+# disease                         definition country value
+#  1: Cholera              Improved water source  common  1.08
+#  2: Cholera               Bottled water source  common  0.35
+#  3: Cholera                      Treated water  common  0.44
+#  4: Cholera   Safe water storage and transport  common  0.55
+#  5: Cholera                Improved sanitation  common  1.37
+#  6: Cholera         Self-reported good hygiene  common  0.35
+#  7: Cholera   Observation of hygiene materials  common  0.34
+#  8: Cholera            Unimproved water source  common  3.42
+#  9: Cholera              Surface water contact  common  2.27
+# 10: Cholera                    Untreated water  common  3.47
+# 11: Cholera Unsafe water storage and transport  common  2.79
+# 12: Cholera                    Open defecation  common  5.62
+# 13: Cholera              Unimproved sanitation  common  2.46
+# 14: Cholera                  Shared sanitation  common  1.90
+# 15: Cholera      Self-reported lack of hygiene  common  3.75
+
+wash_prop_ref <- filter(wash_prop, year == 2010)
+# > names(wash_prop_ref)
+#  [1] "year"                     
+#  [2] "country"                  
+#  [3] "at_least_basic_sanitation"
+#  [4] "at_least_basic_water"     
+#  [5] "basic_hygiene"            
+#  [6] "no_open_defecation"       
+#  [7] "no_surface_water"         
+#  [8] "no_unimproved_sanitation" 
+#  [9] "no_unimproved_water"      
+# [10] "safely_managed_water"    
+
+wash_risk_ratio_cholera <- data.frame(
+  var = names(wash_prop)[3:10],
+  risk_ratio = c(NA, NA, 0.35, 1/5.62, 1/2.27, 1/2.46, 1/3.42, 1/2.79))
+
+saveRDS(wash_risk_ratio_cholera, "outputs/wash_risk_ratio_cholera.rds")
+usethis::use_data(wash_risk_ratio_cholera, overwrite = T)
+```
+
+## Case fatality ratio 
+```{r}
+d <- fread("inst/extdata/cholera_case_fatality_ratio.csv")
+d$country <- clean_country_names(d$country)
+d %>% filter(year > 1999) %>% 
+  group_by(country) %>% 
+  summarize(mean = mean(cfr, na.rm = T),
+            median = median(cfr, na.rm = T),
+            min = min(cfr, na.rm = T),
+            max = max(cfr, na.rm = T),
+            sd = sd(cfr, na.rm = T),
+            sample_size = n(),
+            se = sd / sqrt(sample_size),
+            upper = mean + 1.96*se,
+            lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)) -> cholera_cfr_summary
+
+## Bangladesh
+## average from 1990 to 2000 as the data from 2001 not available
+d[country == "Bangladesh" & year %in% 1990:2000] -> ban
+mean <- mean(ban$cfr, na.rm = T)
+median = median(ban$cfr, na.rm = T)
+min = min(ban$cfr, na.rm = T)
+max = max(ban$cfr, na.rm = T)
+sd = sd(ban$cfr, na.rm = T)
+sample_size = sum(!is.na(ban$cfr))
+se = sd / sqrt(sample_size)
+upper = mean + 1.96*se
+lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)
+vec <- c(mean, median, min, max, sd, sample_size, se, upper, lower)
+for(i in 2:10) {
+  cholera_cfr_summary[cholera_cfr_summary$country == "Bangladesh", i] <- vec[i-1]
+}
+cholera_cfr_summary <- rbind(cholera_cfr_summary, tail(cholera_cfr_summary, 1))
+
+tan <- target_countries[!target_countries %in% unique(cholera_cfr_summary$country)]
+cholera_cfr_summary[47, 1] <- tan
+## Tanzania, 
+## average of East Africa
+africa <- fread("inst/extdata/africa_subregion_country_names.csv")
+africa %>% filter(Subregion == "Eastern Africa") -> east_africa
+east_africa$Country <- clean_country_names(east_africa$Country)
+d %>% 
+  filter(year > 1999 & country %in% east_africa$Country) %>% 
+  summarize(mean = mean(cfr, na.rm = T),
+            median = median(cfr, na.rm = T),
+            min = min(cfr, na.rm = T),
+            max = max(cfr, na.rm = T),
+            sd = sd(cfr, na.rm = T),
+            sample_size = n(),
+            se = sd / sqrt(sample_size),
+            upper = mean + 1.96*se,
+            lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)) -> east_africa_cholera_cfr_summary
+
+cholera_cfr_summary[47, 2:10] <- east_africa_cholera_cfr_summary[1,]
+## Algeria use the data from 1980 because of the paucity of the data
+d %>% 
+  filter(year > 1979 & country  == "Algeria") %>% 
+  summarize(mean = mean(cfr, na.rm = T),
+            median = median(cfr, na.rm = T),
+            min = min(cfr, na.rm = T),
+            max = max(cfr, na.rm = T),
+            sd = sd(cfr, na.rm = T),
+            sample_size = n(),
+            se = sd / sqrt(sample_size),
+            upper = mean + 1.96*se,
+            lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)) -> alg_cfr_summary
+
+cholera_cfr_summary[2, 2:10] <- alg_cfr_summary[1, 1:9]
+# fwrite(cholera_cfr_summary, "outputs/cholera_cfr.csv")
+
+cfr_data_cholera <- fread("outputs/cholera_cfr.csv")
+# life_expectancy_data <- life_expectancy
+# 
+# usethis::use_data(life_expectancy_data, overwrite = TRUE)
+usethis::use_data(cfr_data_cholera, overwrite = TRUE)
+
+
+# -------------------------------------------------------------------------
+# Edit 12 Jan 2024
+# Cholera case data were download https://worldhealthorg.shinyapps.io/page10cholera_data/
+d <- fread("inst/extdata/Cholera_cases_2000_2022.csv")
+d$Country <- clean_country_names(d$Country)
+# d$CFR == round(100*d$Deaths/d$Total_Cases, digits=2)
+d %>% filter(Year > 1999) %>% 
+  group_by(Country) %>% 
+  summarize(sum_case = sum(Total_Cases, na.rm=T),
+            sum_death = sum(Deaths, na.rm=T),
+            sample_size = n()) -> d1
+
+d1 |> mutate(estimate = sum_death / sum_case,
+            se = sqrt(estimate*(1-estimate)/sample_size),
+            lower = ifelse(estimate - 1.96*se > 0, estimate - 1.96*se, 0),
+            upper = estimate + 1.96*se) -> d2
+
+# d2$estimate <- 100*d2$estimate
+# d2$se <- 100*d2$se
+# d2$lower <- 100*d2$lower
+# d2$upper <- 100*d2$upper
+
+cntry_df <- data.frame(Country = target_countries_cholera)
+df <- dplyr::left_join(cntry_df, d2, by="Country")
+
+# data are missing for a few countries
+# values for the following four countires are either unavailable or zero (Bangladesh)
+# Bangladesh
+# Central African Republic
+# Congo, Democratic Republic of the
+# Algeria
+cntries = c("Bangladesh","Central African Republic",
+                     "Congo, Democratic Republic of the","Algeria")
+for (cn in cntries) {
+  df[df$Country == cn, ]$estimate = 
+    cfr_data_cholera[cfr_data_cholera$country == cn,]$mean / 100
+  df[df$Country == cn, ]$se = 
+    cfr_data_cholera[cfr_data_cholera$country == cn,]$se / 100
+  df[df$Country == cn, ]$lower = 
+    cfr_data_cholera[cfr_data_cholera$country == cn,]$lower / 100
+  df[df$Country == cn, ]$upper = 
+    cfr_data_cholera[cfr_data_cholera$country == cn,]$upper / 100
+}
+
+names(df) = c("country","sum_case","sum_death",
+               "sample_size","estimate",
+               "se","lower",'upper')
+
+cfr_data_cholera_2023 = setDT(df) # to use data.table functions
+usethis::use_data(cfr_data_cholera_2023, overwrite = TRUE)
+```
+
+
+## Mean and standard deviation of the number of reported cases
+Create a summary of cholera cases reported to WHO. In particular, coefficient of
+variation was calculated and its mean was as an input to a lognormal 
+distribution used to generate a random variable for the country level incidence rate.
+```{r}
+d <- fread("inst/extdata/cholera_reported_WHO.csv", data.table = F)
+names(d) <- c("country", "year", "reportred_cases")
+d$country <- clean_country_names(d$country)
+d %>% filter(year > 1999) %>%
+  mutate(across(2:3, as.numeric)) %>% 
+  group_by(country) %>% 
+  summarize(mean = mean(reportred_cases, na.rm = T),
+            median = median(reportred_cases, na.rm = T),
+            min = min(reportred_cases, na.rm = T),
+            max = max(reportred_cases, na.rm = T),
+            sd = sd(reportred_cases, na.rm = T),
+            cv = sd / mean,
+            sample_size = n(),
+            se = sd / sqrt(sample_size),
+            upper = mean + 1.96*se,
+            lower = ifelse(mean - 1.96*se > 0, mean - 1.96*se, 0)) ->
+  cholera_case_WHO_data_summary
+
+usethis::use_data(cholera_case_WHO_data_summary, overwrite = TRUE)
+```
+
+
+## Population at risk of cholera or typhoid fever
+
+We assume that people who have at least basic sanitation are safe from these diseases (or at least, have reduced risk). We used the WaSH data from JMP (2000-2017) to fit a saturating exponential function to roughly estimate the trend of WaSH.
+
+## Estimate the proportion of population with access to basic sanitation services
+WaSH data were downloaded from [JMP](https://washdata.org/data/downloads#WLD) and Household World file.
+The data in Excel worksheet format has 4 tabs: introduction and 3 data sheets (water, sanitation, and hygiene).
+We assume that people with at least basic sanitation are protected from cholera, which is a simplifying assumption, which will be addressed (eg, we can alternatively assume that they have lower risk of infection). 
+The data file was opened in MS Excel and each data tab was saved as csv (JMP2019_WLD_water.csv, JMP2019_WLD_sanitation.csv, JMP2019_WLD_hygiene.csv) 
+
+```{r}
+library(data.table)
+ref <- fread("inst/extdata/central-burden-template.202110gavi-2.Cholera_IVI-Kim_standard.csv")
+target_countries <- clean_country_names(unique(ref$country_name))
+dat <- fread("inst/extdata/JMP_2019_WLD_sanitation.csv")
+dat <- dat[-c(1,2,4179,4180), c(1,3,6:9)] # after viewing the file, rows and columns were decided.
+names(dat) <- c("country", "year", "at_least_basic", "limited", "unimproved", "open_defecation")
+
+dat[, year := as.double(year)]
+dat[, country := clean_country_names(country)]
+dat <- as.data.frame(dat)
+for(i in 1:nrow(dat)){
+  for(j in 1:ncol(dat)){
+    val <- dat[i, j]
+    cat("i=", i, "j=", j, "val=", val,"\n")
+    if(!is.na(val)){
+      if(val == "<1") {
+        dat[i, j] <- 0.5
+      }
+      if(val == "-") {
+        dat[i, j] <- NA
+      }
+      if(val == ">99") {
+        dat[i, j] <- 99.5
+      }
+    }
+  }
+}
+dat <- setDT(dat)
+dat <- dat[!is.na(dat$open_defecation), ]
+## for all of the countries on the list
+
+cntries <- unique(dat$country)
+## optim fit
+## multiple initial values are used and the best fit (minimum value) is chosen
+starts <- pomp::sobol_design(lower = c(par1=1900, par2=1e-6),
+                             upper = c(par1=2000, par2=1), nseq=10)
+
+fitres <- list()
+for (i in 1:length(cntries)) {
+  cntry <- cntries[i]
+  message(paste0("i = ", i, ", country = ", cntry))
+  # x <- dat[country == cntry, .(year, open_defecation = 1 - as.double(open_defecation)/100)]
+  # x <- dat[country == cntry, .(year, at_least_basic = as.double(at_least_basic) / 100)]
+  # x <- dat[country == cntry, .(year, limited = 1 - (as.double(limited) / 100))]
+  x <- dat[country == cntry, .(year, improved = 1 - (as.double(unimproved) / 100))]
+  fitvals <- rep(NA, nrow(starts))
+  fitlist <- list()
+  for(j in 1:nrow(starts)){ # multiple starting points to ensure a good fit
+    f <- optim(
+      par = c(starts$par1[j], starts$par2[j]),
+      fn = ssq,
+      x = x,
+      hessian = TRUE,
+      control = list(trace = 0))
+    fitvals[j] <- f$value
+    fitlist[[j]] <- f
+  }
+  fit <- fitlist[[which(fitvals == min(fitvals))]]
+  fitres[[i]] <- fit
+  fitres[[i]]$country <- cntry 
+}
+
+for (i in seq_along(cntries)) {  
+  cntry <- cntries[i]
+  cat("i =", i , "/", length(cntries), "\n")
+  # d <- dat[country == cntries[i], .(year, open_defecation = 1 - open_defecation)]
+  # d <- dat[country == cntries[i], .(year, at_least_basic = as.double(at_least_basic) / 100)]
+  # d <- dat[country == cntry, .(year, limited = 1 - (as.double(limited) / 100))]
+  d <- dat[country == cntry, .(year, improved = 1 - (as.double(unimproved) / 100))]
+  x <- 2000:2100
+  plot(x, 1 - exp(-fitres[[i]]$par[[2]] * (x - fitres[[i]]$par[[1]])), type='l',
+       main = cntries[i], ylim=c(0,1))
+  points(d[[1]], d[[2]], col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+
+for (i in seq_along(fitres)){
+  cat("i =", i , "/", length(cntries), "\n")
+  if(det(fitres[[i]]$hessian) > 0){
+    fitres[[i]]$stderr <- sqrt(abs(diag(solve(fitres[[i]]$hessian))))
+  } else {
+    fitres[[i]]$stderr <- NA
+  }
+}
+
+
+# tstamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+# saveRDS(fitres, paste0("outputs/fit_1_minus_unimproved", tstamp, ".rds"))
+
+# stderr <- sqrt(abs(diag(solve(fit$hessian))))
+# R0_CI <- fit$par["R0"] + c(-1,1)*1.96*stderr["R0"]
+# k_CI <- fit$par["k"] + c(-1,1)*1.96*stderr["k"]
+
+## create proportion by year based on the fit
+fitlist <- readRDS("outputs/fit_1_minus_open_defecation20210813T200404.rds")
+prop_no_open_defecation <- setDT(expand.grid(year = 2000:2100, country = target_countries))
+prop_no_open_defecation[, pred := 0]
+
+for (i in seq_along(target_countries)) {
+  pars <- fitlist[[i]]$par
+  prop_no_open_defecation[country == target_countries[i], pred := (1 - exp(-pars[2] * (year - pars[1])))]
+}
+## Remove negative values
+prop_no_open_defecation[, pred := pmax(pred, 0)]
+
+names(prop_no_open_defecation) <- c("year", "country", "prop")# check the order! 
+usethis::use_data(prop_no_open_defecation, overwrite = TRUE)
+# fwrite(prop_no_open_defecation, "outputs/prop_no_open_defecation.csv")
+ 
+# prop_basic_san <- setDT(expand.grid(year = 2000:2100, country = target_countries))
+# prop_basic_san$pred <- 0
+# 
+# for (i in seq_along(target_countries)) {
+#   prop_basic_san[country == target_countries[i], pred := (1 - exp(-fit[i,2] * (year - fit[i, 1])))]
+#   # san %>% filter(country == target_countries[i]) %>% 
+#   #   mutate(pred = (1 - exp(-fit[i,2] * (year - fit[i, 1])))) -> san
+# }
+# ## Remove negative values
+# prop_basic_san[, pred := pmax(pred, 0)]
+#   
+## take the mean over the previous years 
+
+
+## For countries where no data are available, we take the mean of all countries
+## for which proportion of population is available from year 2000 onwards
+mean2000 <- prop_basic_san[year == 2000, mean(pred)]
+nodata <- c(11, 23, 64, 65, 84)
+for (i in seq_along(nodata)) {
+  id <- nodata[i]
+  prop_basic_san[country == target_countries[id], pred := rep(mean2000, 101)]
+}
+## check again if values are reasonable by plotting them
+for (i in seq_along(target_countries)) {  
+  cat("i =", i , "/", length(target_countries), "\n")
+  dsan <- d[country == target_countries[i]] 
+  pred <- prop_basic_san[country == target_countries[i]] 
+  plot(pred$year, pred$pred, type='l', main = target_countries[i])
+  points(dsan$year, dsan$prop, col=2)
+  invisible(readline(prompt = "Press RET to continue"))
+}
+#
+## Congo, Republic of the missing and fitting again
+dsan <- d[country == "Congo, Republic of the"]
+fit <- saturating_exp_fit(x = dsan, 
+                          start = c(2000, 1e-1),
+                          lower = c(1e-6, 1e-6),
+                          upper = c(2100-1e-3, 10)) 
+
+prop_basic_san_congo <- data.frame(year = 2000:2100, country = "Congo, Republic of the", prop = NA)
+prop_basic_san_congo$prop <- 1 - exp(-fit[2] * (prop_basic_san_congo$year - fit[1]))
+
+plot(prop_basic_san_congo$year, prop_basic_san_congo$prop, type='l', main = unique(dsan$country))
+points(dsan$year, dsan$prop, col=2)
+prop_basic_san <- rbind(prop_basic_san, prop_basic_san_congo)
+
+names(prop_basic_san) <- c("year", "country", "prop")# check the order! 
+usethis::use_data(prop_basic_san, overwrite = TRUE)
+```
+
+## Example plots for WASH prop data vs. model
+```{r}
+# Afghanistan as an example
+library(ggplot2)
+
+cntry <- "Afghanistan" #"Ethiopia"
+
+model <- wash_prop %>% filter(country == cntry)
+dat <- fread("inst/extdata/JMP_2021_WLD_Water.csv")
+dat <- dat[-c(1,2,4179,4180), c(1,3,6:9)] # columns and rows are chosen manually
+# View(dat)
+names(dat) <- c("country", "year", "at_least_basic", "limited", "unimproved", "surface_water")
+dat <- dat[dat$country == cntry, ]
+p <- ggplot(model) + 
+  geom_line(aes(year, at_least_basic_water)) + 
+  geom_point(data=dat, aes(year, as.double(at_least_basic)/100), 
+             color = "red") + 
+  labs(x="Year", y="Proportion of population \nwith access to at least basic water", title = cntry)
+
+ggsave(paste0("plots/", cntry, "_water.png"), p, width=3.4*2, height=2.7*2, units="in")
+```
+

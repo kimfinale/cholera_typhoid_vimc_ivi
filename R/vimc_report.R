@@ -1,6 +1,6 @@
 #' VIMC report
 #'
-#' The \code{vimc_report()} reshapes simulation results (e.g., data frame in the wide format or a list of wide-format data frames into the long format
+#' The \code{vimc_report()} takes the mean across stochastic runs and reshapes simulation results (e.g., data frame in the wide format or a list of wide-format data frames into the long format
 #' @param template The VIMC template used
 #' @param sim_output The population data of countries which includes the file
 #' @export
@@ -14,7 +14,7 @@ vimc_report <- function (disease = NULL,
                          year = 2000:2100,
                          age = 0:100,
                          value_name) {
-
+  ## means of elements across the
   if((!is.data.frame(sim_output)) & is.list(sim_output)){
     arr <- array(unlist(sim_output), dim = c(dim(sim_output[[1]]), length(sim_output)))
     df <- as.data.frame(rowMeans(arr, na.rm = TRUE, dims = 2))
