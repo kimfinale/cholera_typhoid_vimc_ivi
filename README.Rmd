@@ -1,5 +1,5 @@
 ---
-title: "README: VIMC Cholera and Typhoid Project"
+title: "VIMC Cholera and Typhoid Project"
 author: "Jong-Hoon Kim"
 date: "`r Sys.Date()`"
 output: 
@@ -38,11 +38,77 @@ The models account for the indirect effects of vaccination (herd immunity).
 
 ## How to Run
 
-To reproduce a specific set of results:
-1.  Open the relevant `Rmd` file (e.g., `cholera_model_runs_2023.Rmd`).
-2.  Ensure all dependencies are loaded (the scripts typically use `devtools::load_all()` to load the package functions).
-3.  Run the chunks sequentially to:
-    *   Generate or load parameter sets.
-    *   Define population cohorts.
-    *   Execute the `simulate_[disease]` function.
-    *   Aggregate and save the outputs to the `outputs/` folder.
+To run the simulations, follow the workflow below. This example demonstrates how to run a Cholera simulation. The Typhoid simulation follows a similar pattern using `simulate_tf`.
+
+```r
+# 1. Load the package and data
+devtools::load_all()
+
+# 2. Define simulation settings
+dis <- "Cholera"
+nruns <- 200 # Number of stochastic runs
+target_countries <- target_countries_cholera # or specify a vector of ISO3 codes
+vacc_scenarios <- c("novacc", "campaign")
+
+# 3. Create Parameters List
+# Generate stochastic parameters for each country
+params_list <- list()
+for (k in seq_along(target_countries)) {
+  cntry <- target_countries[[k]]
+  params_list[[k]] <- set_params_cholera(
+    disease = dis,
+    nruns = nruns,
+    country = cntry,
+    parameter_data = parameter_data_cholera,
+    incidence_rate_data = overall_incid_rate_cholera,
+    case_fatality_ratio_data = cfr_data_cholera
+  )
+}
+names(params_list) <- target_countries
+
+# 4. Create Cohort List
+# Generate population cohorts for each country
+cohort_list <- lapply(target_countries, function(z) {
+  setup_cohorts(country = z, year = "2000:2100", population_data = population_data)
+})
+names(cohort_list) <- target_countries
+
+# 5. Run Simulation
+# Iterate over vaccination scenarios
+for (vacc_scenario in vacc_scenarios) {
+  message(paste("Running scenario:", vacc_scenario))
+  
+  # Select appropriate coverage data (logic may vary based on scenario)
+  # Here we assume a default list exists or is loaded
+  vacc_cov_data <- NULL 
+  if (vacc_scenario == "campaign") {
+    vacc_cov_data <- vacc_cov_input_cholera[[1]] # Example selection
+  }
+
+  sim <- simulate_cholera(
+    disease = dis,
+    year = "2000:2100",
+    country = target_countries,
+    params_list = params_list,
+    vacc_scenario = vacc_scenario,
+    vacc_cov_data = vacc_cov_data,
+    cohort = cohort_list,
+    life_expectancy_data = life_expectancy_data,
+    wash_prop = wash_prop,
+    wash_risk_ratio = wash_risk_ratio_cholera,
+    vacc_indirect_effect = TRUE,
+    run_ids = 1:nruns
+  )
+
+  # 6. Save Outputs
+  ttimestamp <- format(Sys.time(), "%Y%m%dT%H%M%S")
+  saveRDS(sim$stoch, paste0("outputs/stoch_output_list_", ttimestamp, "_", dis, "_", vacc_scenario, ".rds"))
+  saveRDS(sim$central, paste0("outputs/central_output_list_", ttimestamp, "_", dis, "_", vacc_scenario, ".rds"))
+}
+```
+
+### Key Functions
+*   `set_params_[disease]`: Generates stochastic parameters.
+*   `setup_cohorts`: specifices the population structure over time.
+*   `simulate_[disease]`: The main wrapper that executes `vaccine_impact` functions across countries and run IDs.
+
