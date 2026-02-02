@@ -2,27 +2,32 @@
 % Please edit documentation in R/create_vaccine_coverage.R
 \name{create_vaccine_coverage}
 \alias{create_vaccine_coverage}
-\title{Vaccinate population for a set of condition}
+\title{Create vaccine coverage
+This is a simple function to create a vaccine coverage for each of the age
+group and year because vaccine coverage data of the VIMC include two
+parameters: target population and the coverage rate. Actual coverage rate
+for the modeling is coverage * target population size / total population size}
 \usage{
 create_vaccine_coverage(
-  disease = NULL,
   country = NULL,
-  vacc_input = NULL,
-  routine = TRUE,
-  num_row = 101,
-  num_col = 101,
+  population = NULL,
+  vaccine_coverage_data = NULL,
   year = 2000:2100
 )
 }
 \arguments{
 \item{country}{name of the country}
 
-\item{vacc_input}{vaccine coverage information in the long format}
+\item{vaccine_coverage_data}{vaccine coverage information in the long format}
 
 \item{year}{Year in which vaccination is implemented}
 }
 \description{
-Vaccinate population for a set of condition
+Create vaccine coverage
+This is a simple function to create a vaccine coverage for each of the age
+group and year because vaccine coverage data of the VIMC include two
+parameters: target population and the coverage rate. Actual coverage rate
+for the modeling is coverage * target population size / total population size
 }
 \examples{
 pop <- setup_population(); compute_cases(pop)

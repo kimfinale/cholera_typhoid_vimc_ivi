@@ -19,7 +19,7 @@ vimc_report(
 \item{template}{The VIMC template used}
 }
 \description{
-The \code{vimc_report()} reshapes simulation results (e.g., data frame in the wide format or a list of wide-format data frames into the long format
+The \code{vimc_report()} takes the mean across stochastic runs and reshapes simulation results (e.g., data frame in the wide format or a list of wide-format data frames into the long format
 }
 \examples{
 vimc_report()

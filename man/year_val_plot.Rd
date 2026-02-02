@@ -4,7 +4,13 @@
 \alias{year_val_plot}
 \title{Ploting year vs. variable values}
 \usage{
-year_val_plot(sim_central_value, disease = NULL, country = NULL, age)
+year_val_plot(
+  disease = NULL,
+  country = NULL,
+  vacc_scenario = NULL,
+  sim_central_value,
+  age
+)
 }
 \arguments{
 \item{disease}{disease (i.e., either Typhoid or Cholera)}

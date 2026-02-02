@@ -5,28 +5,29 @@
 \title{Compute the number of cases for a given population and incidence rate}
 \usage{
 calculate_cases(
-  disease = NULL,
   country = NULL,
   population = NULL,
   year = 2000:2100,
-  ir = NULL
+  year_risk_ref = 2015,
+  incidence_rate = NULL,
+  prop_high_risk = NULL,
+  risk_ratio = NULL,
+  adjust_risk = TRUE
 )
 }
 \arguments{
-\item{disease}{The disease of interest: cholera or typhoid in lowercase letters}
-
 \item{country}{The name of the target country}
 
 \item{population}{A population at risk}
 
 \item{year}{The range of years during which calculation is conducted. VIMC default is 2000:2100}
 
+\item{year_risk_ref}{Using the prop of high and low risk groups at the referece
+year, incidence rates for both groups are calculated}
+
 \item{ir}{Incidence rate. If not provided, this is automatically calculated based on the default database and the given country name}
 }
 \description{
 The \code{calculate_cases()} is used to calculate estimates number of cases for given interpolated
 population for both sexes and incidence rate
-}
-\examples{
-pop <- setup_population(disease, country); calculate_cases(disease, country, pop)
 }

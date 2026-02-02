@@ -1,0 +1,21 @@
+Region,Sub_Region,Age,Mean,Lower,Upper
+Asia,South-Eastern Asia,Overall,0.008,0.003,0.016
+Asia,South-Eastern Asia,Children,0.003,0,0.007
+Asia,South-Eastern Asia,Adult mixed,0.013,0.003,0.027
+Asia,Southern Asia,Overall,0.008,0.004,0.012
+Asia,Southern Asia,Children,0.007,0.001,0.017
+Asia,Southern Asia,Adult mixed,0.007,0.003,0.013
+Africa,Eastern Africa,Overall,0.036,0.007,0.081
+Africa,Eastern Africa,Children,0.024,0.002,0.063
+Africa,Eastern Africa,Adult mixed,0.049,0,0.132
+Africa,Western Africa,Overall,0.063,0.015,0.136
+Africa,Western Africa,Children,0.064,0.007,0.161
+Africa,Western Africa,Adult mixed,0.041,0.005,0.1
+Africa,Southern Africa,Overall,0.047,0.017,0.089
+Africa,Middle Africa,Overall,0.25,0.132305807,0.367694193
+Oceania,Overall,Overall,0.072,0,0.204
+Americas,Overall,Overall,0.067,0,0.199
+Europe,Overall,Overall,0.01,0,0.068
+Asia,Overall,Overall,0.009,0.006,0.013
+Africa,Overall,Overall,0.054,0.027,0.089
+Overall,Overall,Overall,0.02,0.014,0.028

@@ -5,20 +5,27 @@
 \title{Calculate disbility-adjusted life years (DALY)}
 \usage{
 calculate_DALY(
-  disease = NULL,
-  country = NULL,
-  cases = NULL,
-  year = 2000:2100,
-  disability_weight = NULL,
-  illness_duration = NULL,
-  case_fatality = NULL,
-  life_expectancy_data = "data/201910gavi-5_dds-201910_2_life_ex_both.csv"
+  disease,
+  country,
+  cases,
+  year = NULL,
+  life_expectancy = NULL,
+  disability_weight_severe = NULL,
+  disability_weight_moderate = NULL,
+  disability_weight_mild = NULL,
+  prob_inpatient = NULL,
+  prob_outpatient = NULL,
+  prob_nocare = NULL,
+  case_fatality_inpatient = NULL,
+  case_fatality_outpatient = NULL,
+  case_fatality_nocare = NULL,
+  illness_duration = NULL
 )
 }
 \arguments{
 \item{year}{A range of years during which}
 
-\item{disability_weight}{A fraction that expresses the severity of the disease compared to the death}
+\item{life_expectancy}{Life expectancy at the time of death in years}
 
 \item{illness_duration}{The duration of the disease in terms of days}
 
@@ -26,7 +33,7 @@ calculate_DALY(
 
 \item{population_data}{The population data of countries which includes the file}
 
-\item{life_expectancy}{Life expectancy at the time of death in years}
+\item{disability_weight}{A fraction that expresses the severity of the disease compared to the death}
 }
 \description{
 The \code{calculate_DALY()} is used to calculate DALY and a wrapper of \code{setup_cohorts()}, \code{calculate_cases()}, \code{calculate_YLL()} and \code{calculate_YLD()} functions

@@ -7,7 +7,15 @@
 calculate_YLD(
   disease = NULL,
   cases = NULL,
-  disability_weight = NULL,
+  disability_weight_severe = NULL,
+  disability_weight_moderate = NULL,
+  disability_weight_mild = NULL,
+  prob_inpatient = NULL,
+  prob_outpatient = NULL,
+  prob_nocare = NULL,
+  case_fatality_inpatient = NULL,
+  case_fatality_outpatient = NULL,
+  case_fatality_nocare = NULL,
   illness_duration = NULL
 )
 }
@@ -16,9 +24,9 @@ calculate_YLD(
 
 \item{cases}{The number of cases with diseases of interest}
 
-\item{disability_weight}{A fraction that expresses the severity of the disease compared to the death}
-
 \item{illness_duration}{Duration of illness in terms of year}
+
+\item{disability_weight}{A fraction that expresses the severity of the disease compared to the death}
 }
 \description{
 The \code{calculate_YLD()} computes YLD.

@@ -4,20 +4,14 @@
 \alias{setup_cohorts}
 \title{Base population setup}
 \usage{
-setup_cohorts(
-  country = NULL,
-  year = 2000:2100,
-  rel_risk_low = 0,
-  population_data = "data/201910gavi-5_dds-201910_2_int_pop_both.csv",
-  prop_san_data = "data/JMP2019.csv"
-)
+setup_cohorts(country = NULL, year = NULL, population_data = NULL)
 }
 \arguments{
 \item{country}{The of country of interest for which you want to set up the population in}
 
-\item{year}{A range of years during which poul}
+\item{year}{A range of years during which cohorts are created}
 
-\item{population_data}{The population data of countries which includes the file}
+\item{sanitation_RR}{Relative risk of those with at least basic sanitation according to JMP WASH definition}
 }
 \description{
 The \code{setup_population ()} sets up cohorts using the interpolated population for both sexes

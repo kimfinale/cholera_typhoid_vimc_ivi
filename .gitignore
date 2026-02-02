@@ -1,6 +1,13 @@
 .Rproj.user
 .Rhistory
-.RData
+*.RData
 .Ruserdata
-inst
-outputs
+
+# Ignore R data and documentation files
+*.rds
+*.rda
+*.rd
+
+# Ignore everything under outputs/
+inst/
+outputs/

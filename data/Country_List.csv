@@ -1,0 +1,235 @@
+COUNTRY,UN_MEMBER,SUB_REGION,REGION
+Algeria,1,Northern Africa,AFRICA
+Angola,1,Middle Africa,AFRICA
+Benin,1,Western Africa,AFRICA
+Botswana,1,Southern Africa,AFRICA
+Burkina Faso,1,Western Africa,AFRICA
+Burundi,1,Eastern Africa,AFRICA
+Cabo Verde,1,Western Africa,AFRICA
+Cameroon,1,Middle Africa,AFRICA
+Central African Republic,0,Middle Africa,AFRICA
+Chad,1,Middle Africa,AFRICA
+Comoros,1,Eastern Africa,AFRICA
+Congo,1,Middle Africa,AFRICA
+Cote d'Ivoire,1,Western Africa,AFRICA
+Democratic Republic of the Congo,1,Middle Africa,AFRICA
+Djibouti,1,Eastern Africa,AFRICA
+Egypt,1,Northern Africa,AFRICA
+Equatorial Guinea,1,Middle Africa,AFRICA
+Eritrea,1,Eastern Africa,AFRICA
+Ethiopia,1,Eastern Africa,AFRICA
+Gabon,1,Middle Africa,AFRICA
+Gambia,1,Western Africa,AFRICA
+Ghana,1,Western Africa,AFRICA
+Guinea,1,Western Africa,AFRICA
+Guinea-Bissau,1,Western Africa,AFRICA
+Kenya,1,Eastern Africa,AFRICA
+Lesotho,1,Southern Africa,AFRICA
+Liberia,1,Western Africa,AFRICA
+Libya,1,Northern Africa,AFRICA
+Madagascar,1,Eastern Africa,AFRICA
+Malawi,1,Eastern Africa,AFRICA
+Mali,1,Western Africa,AFRICA
+Mauritania,1,Western Africa,AFRICA
+Mauritius,1,Eastern Africa,AFRICA
+Mayotte,1,Eastern Africa,AFRICA
+Morocco,1,Northern Africa,AFRICA
+Mozambique,1,Eastern Africa,AFRICA
+Namibia,1,Southern Africa,AFRICA
+Niger,1,Western Africa,AFRICA
+Nigeria,1,Western Africa,AFRICA
+R?union,0,Eastern Africa,AFRICA
+Rwanda,1,Eastern Africa,AFRICA
+Saint Helena,0,Southern Africa,AFRICA
+Sao Tome and Principe,1,Middle Africa,AFRICA
+Senegal,1,Western Africa,AFRICA
+Seychelles,1,Eastern Africa,AFRICA
+Sierra Leone,1,Western Africa,AFRICA
+Somalia,1,Eastern Africa,AFRICA
+South Africa,1,Southern Africa,AFRICA
+South Sudan,1,Eastern Africa,AFRICA
+Sudan,1,Northern Africa,AFRICA
+Swaziland,1,Southern Africa,AFRICA
+Togo,1,Southern Africa,AFRICA
+Tunisia,1,Northern Africa,AFRICA
+Uganda,1,Eastern Africa,AFRICA
+United Republic of Tanzania,1,Eastern Africa,AFRICA
+Western Sahara,0,Northern Africa,AFRICA
+Zambia,1,Eastern Africa,AFRICA
+Zimbabwe,1,Eastern Africa,AFRICA
+Afghanistan,1,Southern Asia,ASIA
+Armenia,1,Western Asia,ASIA
+Azerbaijan,1,Western Asia,ASIA
+Bahrain,1,Western Asia,ASIA
+Bangladesh,1,Southern Asia,ASIA
+Bhutan,1,Southern Asia,ASIA
+Brunei Darussalam,1,South-Eastern Asia,ASIA
+Cambodia,1,South-Eastern Asia,ASIA
+China,1,Eastern Asia,ASIA
+"China, Hong Kong SAR",0,Eastern Asia,ASIA
+"China, Macao SAR",0,Eastern Asia,ASIA
+Cyprus,1,Western Asia,ASIA
+Dem. People's Republic of Korea,1,Eastern Asia,ASIA
+Georgia,1,Western Asia,ASIA
+India,1,Southern Asia,ASIA
+Indonesia,1,South-Eastern Asia,ASIA
+Iran (Islamic Republic of),1,Southern Asia,ASIA
+Iraq,1,Western Asia,ASIA
+Israel,1,Western Asia,ASIA
+Japan,1,Eastern Asia,ASIA
+Jordan,1,Western Asia,ASIA
+Kazakhstan,1,Central Asia,ASIA
+Kuwait,1,Western Asia,ASIA
+Kyrgyzstan,1,Central Asia,ASIA
+Lao People's Democratic Republic,1,South-Eastern Asia,ASIA
+Lebanon,1,Western Asia,ASIA
+Malaysia,1,South-Eastern Asia,ASIA
+Maldives,1,Southern Asia,ASIA
+Mongolia,1,Eastern Asia,ASIA
+Myanmar,1,South-Eastern Asia,ASIA
+Nepal,1,Southern Asia,ASIA
+Oman,1,Western Asia,ASIA
+Other non-specified areas,0,Eastern Asia,ASIA
+Pakistan,1,Southern Asia,ASIA
+Philippines,1,South-Eastern Asia,ASIA
+Qatar,1,Western Asia,ASIA
+Republic of Korea,1,Eastern Asia,ASIA
+Saudi Arabia,1,Western Asia,ASIA
+Singapore,1,South-Eastern Asia,ASIA
+Sri Lanka,1,Southern Asia,ASIA
+State of Palestine,0,Western Asia,ASIA
+Syrian Arab Republic,1,Western Asia,ASIA
+Tajikistan,1,Central Asia,ASIA
+Thailand,1,South-Eastern Asia,ASIA
+Timor-Leste,1,South-Eastern Asia,ASIA
+Turkey,1,Western Asia,ASIA
+Turkmenistan,1,Central Asia,ASIA
+United Arab Emirates,1,Western Asia,ASIA
+Uzbekistan,1,Central Asia,ASIA
+Viet Nam,1,South-Eastern Asia,ASIA
+Yemen,1,Western Asia,ASIA
+Albania,1,Southern Europe,EUROPE
+Andorra,1,Southern Europe,EUROPE
+Austria,1,Western Europe,EUROPE
+Belarus,1,Eastern Europe,EUROPE
+Belgium,1,Western Europe,EUROPE
+Bosnia and Herzegovina,1,Southern Europe,EUROPE
+Bulgaria,1,Eastern Europe,EUROPE
+Channel Islands,0,Northern Europe,EUROPE
+Croatia,1,Southern Europe,EUROPE
+Czech Republic,1,Eastern Europe,EUROPE
+Denmark,1,Northern Europe,EUROPE
+Estonia,1,Northern Europe,EUROPE
+Faeroe Islands,0,Northern Europe,EUROPE
+Finland,1,Northern Europe,EUROPE
+France,1,Western Europe,EUROPE
+Germany,1,Western Europe,EUROPE
+Gibraltar,0,Southern Europe,EUROPE
+Greece,1,Southern Europe,EUROPE
+Holy See,0,Southern Europe,EUROPE
+Hungary,1,Eastern Europe,EUROPE
+Iceland,1,Northern Europe,EUROPE
+Ireland,1,Northern Europe,EUROPE
+Isle of Man,0,Northern Europe,EUROPE
+Italy,1,Southern Europe,EUROPE
+Latvia,1,Northern Europe,EUROPE
+Liechtenstein,1,Western Europe,EUROPE
+Lithuania,1,Northern Europe,EUROPE
+Luxembourg,1,Western Europe,EUROPE
+Malta,1,Southern Europe,EUROPE
+Monaco,1,Western Europe,EUROPE
+Montenegro,1,Southern Europe,EUROPE
+Netherlands,1,Western Europe,EUROPE
+Norway,1,Northern Europe,EUROPE
+Poland,1,Eastern Europe,EUROPE
+Portugal,1,Southern Europe,EUROPE
+Republic of Moldova,1,Eastern Europe,EUROPE
+Romania,1,Eastern Europe,EUROPE
+Russian Federation,1,Eastern Europe,EUROPE
+San Marino,1,Southern Europe,EUROPE
+Serbia,1,Southern Europe,EUROPE
+Slovakia,1,Eastern Europe,EUROPE
+Slovenia,1,Southern Europe,EUROPE
+Spain,1,Southern Europe,EUROPE
+Sweden,1,Northern Europe,EUROPE
+Switzerland,1,Western Europe,EUROPE
+TFYR Macedonia,0,Southern Europe,EUROPE
+Ukraine,1,Eastern Europe,EUROPE
+United Kingdom,1,Northern Europe,EUROPE
+Anguilla,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Antigua and Barbuda,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Argentina,1,South America,LATIN AMERICA AND THE CARIBBEAN
+Aruba,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Bahamas,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Barbados,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Belize,1,Central America,LATIN AMERICA AND THE CARIBBEAN
+Bolivia (Plurinational State of),1,South America,LATIN AMERICA AND THE CARIBBEAN
+Brazil,1,South America,LATIN AMERICA AND THE CARIBBEAN
+British Virgin Islands,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Caribbean Netherlands,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Cayman Islands,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Chile,1,South America,LATIN AMERICA AND THE CARIBBEAN
+Colombia,1,South America,LATIN AMERICA AND THE CARIBBEAN
+Costa Rica,1,Central America,LATIN AMERICA AND THE CARIBBEAN
+Cuba,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Cura?ao,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Dominica,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Dominican Republic,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Ecuador,1,South America,LATIN AMERICA AND THE CARIBBEAN
+El Salvador,1,Central America,LATIN AMERICA AND THE CARIBBEAN
+Falkland Islands (Malvinas),0,South America,LATIN AMERICA AND THE CARIBBEAN
+French Guiana,0,South America,LATIN AMERICA AND THE CARIBBEAN
+Grenada,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Guadeloupe,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Guatemala,1,Central America,LATIN AMERICA AND THE CARIBBEAN
+Guyana,1,South America,LATIN AMERICA AND THE CARIBBEAN
+Haiti,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Honduras,1,Central America,LATIN AMERICA AND THE CARIBBEAN
+Jamaica,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Martinique,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Mexico,0,Central America,LATIN AMERICA AND THE CARIBBEAN
+Montserrat,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Nicaragua,1,Central America,LATIN AMERICA AND THE CARIBBEAN
+Panama,1,Central America,LATIN AMERICA AND THE CARIBBEAN
+Paraguay,1,South America,LATIN AMERICA AND THE CARIBBEAN
+Peru,1,South America,LATIN AMERICA AND THE CARIBBEAN
+Puerto Rico,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Saint Kitts and Nevis,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Saint Lucia,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Saint Vincent and the Grenadines,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Sint Maarten (Dutch part),0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Suriname,1,South America,LATIN AMERICA AND THE CARIBBEAN
+Trinidad and Tobago,1,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Turks and Caicos Islands,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+United States Virgin Islands,0,Caribbean,LATIN AMERICA AND THE CARIBBEAN
+Uruguay,1,South America,LATIN AMERICA AND THE CARIBBEAN
+Venezuela (Bolivarian Republic of),1,South America,LATIN AMERICA AND THE CARIBBEAN
+Bermuda,0,,NORTHERN AMERICA
+Canada,1,,NORTHERN AMERICA
+Greenland,0,,NORTHERN AMERICA
+Saint Pierre and Miquelon,0,,NORTHERN AMERICA
+United States of America,1,,NORTHERN AMERICA
+American Samoa,0,Polynesia,OCEANIA
+Australia,1,Australia/New Zealand,OCEANIA
+Cook Islands,0,Polynesia,OCEANIA
+Fiji,1,Australia/New Zealand,OCEANIA
+French Polynesia,0,Polynesia,OCEANIA
+Guam,0,Micronesia,OCEANIA
+Kiribati,1,Micronesia,OCEANIA
+Marshall Islands,1,Micronesia,OCEANIA
+Melanesia,1,Australia/New Zealand,OCEANIA
+Micronesia (Fed. States of),0,Micronesia,OCEANIA
+Nauru,1,Micronesia,OCEANIA
+New Caledonia,0,Australia/New Zealand,OCEANIA
+New Zealand,1,Australia/New Zealand,OCEANIA
+Niue,0,Polynesia,OCEANIA
+Northern Mariana Islands,0,Micronesia,OCEANIA
+Palau,1,Micronesia,OCEANIA
+Papua New Guinea,1,Australia/New Zealand,OCEANIA
+Samoa,1,Polynesia,OCEANIA
+Solomon Islands,1,Australia/New Zealand,OCEANIA
+Tokelau,0,Polynesia,OCEANIA
+Tonga,1,Polynesia,OCEANIA
+Tuvalu,1,Polynesia,OCEANIA
+Vanuatu,1,Australia/New Zealand,OCEANIA
+Wallis and Futuna Islands,0,Polynesia,OCEANIA

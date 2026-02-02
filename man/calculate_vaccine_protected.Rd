@@ -9,9 +9,11 @@ calculate_vaccine_protected(
   country = NULL,
   population = NULL,
   year = 2000:2100,
-  vacc_efficacy = NULL,
-  vacc_duration_effect = NULL,
-  vacc_coverage = NULL
+  vaccine_coverage = NULL,
+  vaccine_efficacy = NULL,
+  vaccine_immunity_duration = NULL,
+  exponential_decay = TRUE,
+  vaccine_efficacy_by_year = NULL
 )
 }
 \arguments{

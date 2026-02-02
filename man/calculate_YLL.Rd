@@ -5,18 +5,23 @@
 \title{Calculate years of life lost (YLL)}
 \usage{
 calculate_YLL(
-  cases = NULL,
   disease = c("Typhoid", "Cholera"),
+  cases = NULL,
   country = NULL,
-  year = 2000:2100,
-  case_fatality = NULL,
-  life_expectancy_data = "data/201910gavi-5_dds-201910_2_life_ex_both.csv"
+  year = NULL,
+  life_expectancy = NULL,
+  prob_inpatient = NULL,
+  prob_outpatient = NULL,
+  prob_nocare = NULL,
+  case_fatality_inpatient = NULL,
+  case_fatality_outpatient = NULL,
+  case_fatality_nocare = NULL
 )
 }
 \arguments{
-\item{deaths}{The number of deaths due to the disease of interest}
-
 \item{life_expectancy}{Life expectancy at the time of death in years}
+
+\item{deaths}{The number of deaths due to the disease of interest}
 }
 \description{
 The \code{calculate_YLL()} calculatess YLL
