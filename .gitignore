@@ -7,6 +7,10 @@
 *.rds
 *.rda
 *.rd
+# Ignore these files (only for local development)
+README_run.Rmd
+typhoid_practice_runs.Rmd
+figures_APR_poster.Rmd
 
 # Ignore everything under outputs/
 inst/
