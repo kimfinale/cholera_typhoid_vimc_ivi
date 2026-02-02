@@ -1,11 +1,7 @@
----
-title: "README: VIMC Cholera and Typhoid Project"
-author: "Jong-Hoon Kim"
-date: "`r Sys.Date()`"
-output: 
-  html_document:
-    keep_md: true
----
+# README: VIMC Cholera and Typhoid Project
+
+**Author:** Jong-Hoon Kim  
+**Date:** 2026-02-02
 
 ## Overview
 
@@ -23,13 +19,10 @@ The R Markdown files (`.Rmd`) in this directory are key to the workflow. Their n
 
 ## Simulation Details
 
-Based on an analysis of the files (specifically `cholera_model_runs_2023.Rmd` and `typhoid_model_runs_2023.Rmd`), the following details regarding the modeling approach were extracted:
-
 ### 1. Standardized Inputs from VIMC
 The simulations rely on standardized inputs provided by VIMC.
 *   **Demography**: The code utilizes VIMC-provided population and demographic data (e.g., `population_data`, `life_expectancy_data`).
 *   **Vaccination Coverage**: Scenario-specific coverage inputs (e.g., No Vaccination, Campaign, Routine) are loaded from VIMC-provided files (often stored in `data` or `inst/extdata`).
-*   **Burden Estimates**: Central burden templates are used to structure the outputs.
 
 ### 2. Indirect Effects
 The models account for the indirect effects of vaccination (herd immunity).
